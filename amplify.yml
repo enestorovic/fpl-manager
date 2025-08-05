@@ -3,14 +3,18 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm ci
+        # Install deps ignoring peer dependency conflicts (React 19 + vaul)
+        - npm install --legacy-peer-deps
     build:
       commands:
+        # Build the Next.js app
         - npm run build
   artifacts:
+    # Next.js build output
     baseDirectory: .next
     files:
       - '**/*'
   cache:
     paths:
       - node_modules/**/*
+      - package-lock.json
