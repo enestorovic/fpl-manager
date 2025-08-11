@@ -93,7 +93,7 @@ export async function syncLeagueData() {
     const { data, error } = await supabase
       .from("league_metadata")
       .insert({
-        league_id: 33122,
+        league_id: 66185,
         league_name: "La Jungla LV - Premier Legue",
         total_entries: 32,
         current_event: 38,
@@ -161,4 +161,94 @@ export async function getAllTeamSummaries(teamId: number) {
     throw error
   }
   return data as TeamSummary[]
+}
+
+// Get teams with their standings as of a specific gameweek
+export async function getTeamsByGameweek(gameweek: number, sortBy: "event_total" | "total" = "total") {
+  // Get all teams
+  const { data: teams, error: teamsError } = await supabase
+    .from("teams")
+    .select("*")
+
+  if (teamsError) {
+    console.error("Database error fetching teams:", teamsError)
+    throw teamsError
+  }
+
+  // Get summaries for the specific gameweek
+  const { data: summaries, error: summariesError } = await supabase
+    .from("team_summaries")
+    .select("*")
+    .eq("event_number", gameweek)
+
+  if (summariesError) {
+    console.error("Database error fetching summaries:", summariesError)
+    throw summariesError
+  }
+
+  // Calculate cumulative totals up to the specified gameweek for each team
+  const teamsWithGameweekData = await Promise.all(
+    teams.map(async (team) => {
+      // Get all summaries up to this gameweek for cumulative total
+      const { data: cumulativeSummaries, error } = await supabase
+        .from("team_summaries")
+        .select("points")
+        .eq("team_id", team.id)
+        .lte("event_number", gameweek)
+
+      if (error) {
+        console.error(`Error fetching cumulative data for team ${team.id}:`, error)
+        return {
+          ...team,
+          event_total: team.event_total, // fallback to current data
+          cumulative_total: team.total // fallback to current data
+        }
+      }
+
+      const cumulativeTotal = cumulativeSummaries?.reduce((sum, summary) => sum + summary.points, 0) || 0
+      const currentGameweekSummary = summaries?.find(s => s.team_id === team.id)
+      const eventTotal = currentGameweekSummary?.points || team.event_total
+
+      return {
+        ...team,
+        event_total: eventTotal,
+        cumulative_total: cumulativeTotal
+      }
+    })
+  )
+
+  // Sort teams based on the specified criteria
+  const sortedTeams = teamsWithGameweekData.sort((a, b) => {
+    if (sortBy === "event_total") {
+      return b.event_total - a.event_total
+    } else {
+      return b.cumulative_total - a.cumulative_total
+    }
+  })
+
+  // Add rankings
+  const rankedTeams = sortedTeams.map((team, index) => ({
+    ...team,
+    rank: index + 1,
+    total: team.cumulative_total // Update total to reflect cumulative total up to this gameweek
+  }))
+
+  return rankedTeams as (Team & { cumulative_total: number })[]
+}
+
+// Get available gameweeks (for dropdown)
+export async function getAvailableGameweeks(): Promise<number[]> {
+  const { data, error } = await supabase
+    .from("team_summaries")
+    .select("event_number")
+    .order("event_number", { ascending: true })
+
+  if (error) {
+    console.error("Database error:", error)
+    throw error
+  }
+
+  // Get unique gameweeks
+  const gameweeks = [...new Set(data?.map(item => item.event_number) || [])]
+  return gameweeks.sort((a, b) => a - b)
 }

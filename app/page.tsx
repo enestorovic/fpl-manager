@@ -9,7 +9,7 @@ import { AdminPanel } from "@/components/admin-panel"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Settings } from "lucide-react"
-import { getTeams } from "@/lib/database"
+import { getTeams, getTeamsByGameweek, getAvailableGameweeks } from "@/lib/database"
 import type { Team } from "@/lib/supabase"
 
 export default function Home() {
@@ -22,16 +22,34 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [showAdmin, setShowAdmin] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [availableGameweeks, setAvailableGameweeks] = useState<number[]>([])
+  const [selectedGameweek, setSelectedGameweek] = useState<number>(38)
+
+  useEffect(() => {
+    initializeData()
+  }, [])
 
   useEffect(() => {
     fetchTeams()
-  }, [sortBy])
+  }, [sortBy, selectedGameweek])
+
+  const initializeData = async () => {
+    try {
+      const gameweeks = await getAvailableGameweeks()
+      setAvailableGameweeks(gameweeks)
+      if (gameweeks.length > 0) {
+        setSelectedGameweek(gameweeks[gameweeks.length - 1]) // Default to latest gameweek
+      }
+    } catch (error) {
+      console.error("Error fetching gameweeks:", error)
+    }
+  }
 
   const fetchTeams = async () => {
     setLoading(true)
     setError(null)
     try {
-      const data = await getTeams(sortBy)
+      const data = await getTeamsByGameweek(selectedGameweek, sortBy)
       setTeams(data)
     } catch (error) {
       console.error("Error fetching teams:", error)
@@ -39,6 +57,10 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleGameweekChange = (gameweek: number) => {
+    setSelectedGameweek(gameweek)
   }
 
   const handleTeamSelect = (team: Team) => {
@@ -105,6 +127,9 @@ export default function Home() {
                 onTeamSelect={handleTeamSelect}
                 onSortChange={handleSortChange}
                 sortBy={sortBy}
+                availableGameweeks={availableGameweeks}
+                selectedGameweek={selectedGameweek}
+                onGameweekChange={handleGameweekChange}
               />
             )}
           </div>

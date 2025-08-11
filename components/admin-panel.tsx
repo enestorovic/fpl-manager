@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { RefreshCw, Database, Users, Calendar, LogOut, Trash2, AlertTriangle, Play } from "lucide-react"
-import { getLeagueMetadata, syncLeagueData, getDatabaseStatus } from "@/lib/database"
+import { getLeagueMetadata, getDatabaseStatus } from "@/lib/database"
+import { fplSyncService } from "@/lib/fpl-sync"
 import { supabase } from "@/lib/supabase"
 import type { LeagueMetadata } from "@/lib/supabase"
 
@@ -47,9 +48,13 @@ export function AdminPanel({ onLogout }: AdminPanelProps) {
     setSyncing(true)
     setMessage("")
     try {
-      await syncLeagueData()
-      await fetchData()
-      setMessage("League data synced successfully!")
+      const result = await fplSyncService.syncFromRealAPI()
+      if (result.success) {
+        await fetchData()
+        setMessage(result.message)
+      } else {
+        setMessage(`Error: ${result.error || result.message}`)
+      }
     } catch (error) {
       console.error("Error syncing data:", error)
       setMessage("Error syncing league data")
@@ -88,7 +93,7 @@ export function AdminPanel({ onLogout }: AdminPanelProps) {
     try {
       // Insert league metadata
       await supabase.from("league_metadata").upsert({
-        league_id: 33122,
+        league_id: 66185,
         league_name: "La Jungla LV - Premier Legue",
         total_entries: 32,
         current_event: 38,
@@ -477,9 +482,9 @@ export function AdminPanel({ onLogout }: AdminPanelProps) {
             ) : (
               <div className="text-center py-8">
                 <p className="text-muted-foreground mb-4">No league data found</p>
-                <Button onClick={handleLoadSampleData} disabled={seeding}>
-                  <Play className="h-4 w-4 mr-2" />
-                  Load Sample Data
+                <Button onClick={handleSync} disabled={syncing}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Sync from JSON Data
                 </Button>
               </div>
             )}
@@ -519,30 +524,18 @@ export function AdminPanel({ onLogout }: AdminPanelProps) {
             <CardTitle>Data Management</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Load Sample Data Button */}
+            {/* Sync from JSON Data Button */}
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-medium text-green-600">Load Sample Data</h3>
-                <p className="text-sm text-muted-foreground">Load all 32 teams and Erik's detailed FPL data</p>
+                <h3 className="font-medium text-green-600">Sync from FPL API</h3>
+                <p className="text-sm text-muted-foreground">Load all teams and detailed data from the real FPL API</p>
               </div>
-              <Button onClick={handleLoadSampleData} disabled={seeding} variant="default">
-                <Play className={`h-4 w-4 mr-2 ${seeding ? "animate-spin" : ""}`} />
-                {seeding ? "Loading..." : "Load Sample Data"}
-              </Button>
-            </div>
-
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium">Sync League Data</h3>
-                <p className="text-sm text-muted-foreground">Manually trigger a data sync from FPL API</p>
-              </div>
-              <Button onClick={handleSync} disabled={syncing} variant="outline">
+              <Button onClick={handleSync} disabled={syncing} variant="default">
                 <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
-                {syncing ? "Syncing..." : "Sync Now"}
+                {syncing ? "Syncing..." : "Sync from JSON"}
               </Button>
             </div>
+
 
             <Separator />
 

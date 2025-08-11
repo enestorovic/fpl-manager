@@ -2,6 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowUpDown, TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Team } from "@/lib/supabase"
@@ -11,9 +12,12 @@ interface LeagueStandingsProps {
   onTeamSelect: (team: Team) => void
   onSortChange: (sortBy: "event_total" | "total") => void
   sortBy: "event_total" | "total"
+  availableGameweeks: number[]
+  selectedGameweek: number
+  onGameweekChange: (gameweek: number) => void
 }
 
-export function LeagueStandings({ teams, onTeamSelect, onSortChange, sortBy }: LeagueStandingsProps) {
+export function LeagueStandings({ teams, onTeamSelect, onSortChange, sortBy, availableGameweeks, selectedGameweek, onGameweekChange }: LeagueStandingsProps) {
   const getChipBadge = (teamId: number) => {
     // Real chip data for GW38 based on team summaries
     const chips: Record<number, string> = {
@@ -38,7 +42,7 @@ export function LeagueStandings({ teams, onTeamSelect, onSortChange, sortBy }: L
     <Card className="h-full">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg">La Jungla LV - Premier Legue</CardTitle>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant={sortBy === "event_total" ? "default" : "outline"}
             size="sm"
@@ -46,7 +50,7 @@ export function LeagueStandings({ teams, onTeamSelect, onSortChange, sortBy }: L
             className="text-xs"
           >
             <ArrowUpDown className="h-3 w-3 mr-1" />
-            GW38 Score
+            GW{selectedGameweek} Score
           </Button>
           <Button
             variant={sortBy === "total" ? "default" : "outline"}
@@ -57,6 +61,18 @@ export function LeagueStandings({ teams, onTeamSelect, onSortChange, sortBy }: L
             <ArrowUpDown className="h-3 w-3 mr-1" />
             Total Score
           </Button>
+          <Select value={selectedGameweek.toString()} onValueChange={(value) => onGameweekChange(parseInt(value))}>
+            <SelectTrigger className="w-20 h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {availableGameweeks.map((gw) => (
+                <SelectItem key={gw} value={gw.toString()}>
+                  GW{gw}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
       <CardContent className="p-0">
