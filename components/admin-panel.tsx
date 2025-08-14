@@ -48,20 +48,23 @@ export function AdminPanel({ onLogout }: AdminPanelProps) {
     setSyncing(true)
     setMessage("")
     try {
+      console.log('Starting real FPL API sync...')
       const result = await fplSyncService.syncFromRealAPI()
+      
       if (result.success) {
-        await fetchData()
         setMessage(result.message)
+        await fetchData() // Refresh the data
       } else {
-        setMessage(`Error: ${result.error || result.message}`)
+        setMessage(`Sync failed: ${result.error}`)
       }
     } catch (error) {
-      console.error("Error syncing data:", error)
-      setMessage("Error syncing league data")
+      console.error('Sync error:', error)
+      setMessage(`Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setSyncing(false)
     }
   }
+
 
   const handleResetDatabase = async () => {
     setResetting(true)
@@ -484,7 +487,7 @@ export function AdminPanel({ onLogout }: AdminPanelProps) {
                 <p className="text-muted-foreground mb-4">No league data found</p>
                 <Button onClick={handleSync} disabled={syncing}>
                   <RefreshCw className="h-4 w-4 mr-2" />
-                  Sync from JSON Data
+                  Load Sample Data
                 </Button>
               </div>
             )}
@@ -532,7 +535,7 @@ export function AdminPanel({ onLogout }: AdminPanelProps) {
               </div>
               <Button onClick={handleSync} disabled={syncing} variant="default">
                 <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
-                {syncing ? "Syncing..." : "Sync from JSON"}
+                {syncing ? "Syncing..." : "Sync from FPL API"}
               </Button>
             </div>
 

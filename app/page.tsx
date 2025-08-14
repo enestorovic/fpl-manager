@@ -5,11 +5,11 @@ import { BottomNav } from "@/components/bottom-nav"
 import { LeagueStandings } from "@/components/league-standings"
 import { TeamSummarySheet } from "@/components/team-summary-sheet"
 import { AdminLogin } from "@/components/admin-login"
-import { AdminPanel } from "@/components/admin-panel"
+import { AutomatedAdminPanel } from "@/components/automated-admin-panel"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Settings } from "lucide-react"
-import { getTeams, getTeamsByGameweek, getAvailableGameweeks } from "@/lib/database"
+import { getTeams, getTeamsByGameweek, getAvailableGameweeks, getCurrentGameweek } from "@/lib/database"
 import type { Team } from "@/lib/supabase"
 
 export default function Home() {
@@ -23,7 +23,7 @@ export default function Home() {
   const [showAdmin, setShowAdmin] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [availableGameweeks, setAvailableGameweeks] = useState<number[]>([])
-  const [selectedGameweek, setSelectedGameweek] = useState<number>(38)
+  const [selectedGameweek, setSelectedGameweek] = useState<number>(1)
 
   useEffect(() => {
     initializeData()
@@ -35,10 +35,21 @@ export default function Home() {
 
   const initializeData = async () => {
     try {
-      const gameweeks = await getAvailableGameweeks()
+      // Get both available gameweeks and current gameweek
+      const [gameweeks, currentGW] = await Promise.all([
+        getAvailableGameweeks(),
+        getCurrentGameweek()
+      ])
+      
       setAvailableGameweeks(gameweeks)
-      if (gameweeks.length > 0) {
-        setSelectedGameweek(gameweeks[gameweeks.length - 1]) // Default to latest gameweek
+      
+      // Set default to current gameweek, fall back to latest available
+      if (gameweeks.includes(currentGW)) {
+        setSelectedGameweek(currentGW)
+        setSortBy("event_total") // Default to current GW score when showing current gameweek
+      } else if (gameweeks.length > 0) {
+        setSelectedGameweek(gameweeks[gameweeks.length - 1])
+        setSortBy("total") // Default to total when not showing current gameweek
       }
     } catch (error) {
       console.error("Error fetching gameweeks:", error)
@@ -78,7 +89,7 @@ export default function Home() {
 
   if (isAdmin) {
     return (
-      <AdminPanel
+      <AutomatedAdminPanel
         onLogout={() => {
           setIsAdmin(false)
           setShowAdmin(false)

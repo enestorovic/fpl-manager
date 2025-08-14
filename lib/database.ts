@@ -252,3 +252,15 @@ export async function getAvailableGameweeks(): Promise<number[]> {
   const gameweeks = [...new Set(data?.map(item => item.event_number) || [])]
   return gameweeks.sort((a, b) => a - b)
 }
+
+// Get current gameweek from league metadata
+export async function getCurrentGameweek(): Promise<number> {
+  const metadata = await getLeagueMetadata()
+  if (metadata && metadata.current_event) {
+    return metadata.current_event
+  }
+  
+  // Fallback: get the latest gameweek from available data
+  const gameweeks = await getAvailableGameweeks()
+  return gameweeks.length > 0 ? gameweeks[gameweeks.length - 1] : 1
+}

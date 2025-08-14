@@ -33,14 +33,20 @@ export class FPLSyncService {
     try {
       console.log('Starting FPL data sync from real FPL API...')
 
-      // Step 1: Fetch league standings
+      // Step 1: Fetch bootstrap data to get current event
+      const bootstrapData = await fplDataService.getBootstrapData()
+      const currentEvent = bootstrapData.events.find(event => event.is_current)
+      const currentEventId = currentEvent?.id || 1
+      console.log(`Current event from FPL API: ${currentEventId}`)
+
+      // Step 2: Fetch league standings
       const standingsData = await fplDataService.getLeagueStandings(this.NEW_LEAGUE_ID)
       console.log(`Raw API response:`, {
         standingsCount: standingsData.standings.results.length,
         newEntriesCount: standingsData.new_entries?.results.length || 0
       })
 
-      // Step 2: Map and validate teams data
+      // Step 3: Map and validate teams data
       const teamsData = mapLeagueStandingsToTeams(standingsData)
       console.log(`Mapped ${teamsData.length} teams from API data`)
       
@@ -51,14 +57,17 @@ export class FPLSyncService {
         console.warn(`${teamsData.length - validTeams.length} teams failed validation`)
       }
 
-      // Step 3: Update league metadata
-      const metadataData = mapLeagueMetadata(standingsData)
+      // Step 4: Update league metadata with current event
+      const metadataData = {
+        ...mapLeagueMetadata(standingsData),
+        current_event: currentEventId
+      }
       await this.upsertLeagueMetadata(metadataData)
 
-      // Step 4: Update teams data
+      // Step 5: Update teams data
       const teamsUpdated = await this.upsertTeams(validTeams)
 
-      // Step 5: Fetch and process detailed data for all teams
+      // Step 6: Fetch and process detailed data for all teams
       const { summariesUpdated, chipsUpdated } = await this.syncAllTeamsDetailedData(validTeams)
 
       const result: SyncResult = {
