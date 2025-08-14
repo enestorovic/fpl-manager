@@ -63,7 +63,7 @@ export function AdminLogin({ onLogin }: AdminLoginProps) {
               {loading ? "Verifying..." : "Login"}
             </Button>
           </form>
-          <div className="mt-4 text-xs text-muted-foreground text-center">Demo code: letmein123</div>
+          {/* <div className="mt-4 text-xs text-muted-foreground text-center">Demo code: letmein123</div> */}
         </CardContent>
       </Card>
     </div>
