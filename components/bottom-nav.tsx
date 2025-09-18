@@ -1,11 +1,11 @@
 "use client"
 
-import { Trophy, Award } from "lucide-react"
+import { Trophy, Award, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface BottomNavProps {
-  activeTab: "league" | "cup"
-  onTabChange: (tab: "league" | "cup") => void
+  activeTab: "league" | "cup" | "bases"
+  onTabChange: (tab: "league" | "cup" | "bases") => void
 }
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
@@ -20,14 +20,27 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           )}
         >
           <Trophy className="h-5 w-5 mb-1" />
-          League
+          Liga
         </button>
         <button
-          disabled
-          className="flex-1 flex flex-col items-center justify-center py-3 px-4 text-sm font-medium text-muted-foreground/50 cursor-not-allowed"
+          onClick={() => onTabChange("cup")}
+          className={cn(
+            "flex-1 flex flex-col items-center justify-center py-3 px-4 text-sm font-medium transition-colors",
+            activeTab === "cup" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground",
+          )}
         >
           <Award className="h-5 w-5 mb-1" />
-          Cup
+          Copas
+        </button>
+        <button
+          onClick={() => onTabChange("bases")}
+          className={cn(
+            "flex-1 flex flex-col items-center justify-center py-3 px-4 text-sm font-medium transition-colors",
+            activeTab === "bases" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <FileText className="h-5 w-5 mb-1" />
+          Bases
         </button>
       </div>
     </div>

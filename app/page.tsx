@@ -6,6 +6,9 @@ import { LeagueStandings } from "@/components/league-standings"
 import { TeamSummarySheet } from "@/components/team-summary-sheet"
 import { AdminLogin } from "@/components/admin-login"
 import { AutomatedAdminPanel } from "@/components/automated-admin-panel"
+import { PublicTournamentList } from "@/components/public-tournament-list"
+import { PublicTournamentViewer } from "@/components/public-tournament-viewer"
+import { BasesViewer } from "@/components/bases-viewer"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Settings } from "lucide-react"
@@ -13,7 +16,7 @@ import { getTeams, getTeamsByGameweek, getAvailableGameweeks, getCurrentGameweek
 import type { Team } from "@/lib/supabase"
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"league" | "cup">("league")
+  const [activeTab, setActiveTab] = useState<"league" | "cup" | "bases">("league")
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [showTeamSheet, setShowTeamSheet] = useState(false)
   const [teams, setTeams] = useState<Team[]>([])
@@ -24,6 +27,9 @@ export default function Home() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [availableGameweeks, setAvailableGameweeks] = useState<number[]>([])
   const [selectedGameweek, setSelectedGameweek] = useState<number>(1)
+
+  // Tournament states
+  const [selectedTournament, setSelectedTournament] = useState<number | null>(null)
 
   useEffect(() => {
     initializeData()
@@ -80,6 +86,14 @@ export default function Home() {
 
   const handleSortChange = (newSortBy: "event_total" | "total") => {
     setSortBy(newSortBy)
+  }
+
+  const handleTournamentSelect = (tournamentId: number) => {
+    setSelectedTournament(tournamentId)
+  }
+
+  const handleBackToTournaments = () => {
+    setSelectedTournament(null)
   }
 
   if (showAdmin && !isAdmin) {
@@ -142,6 +156,27 @@ export default function Home() {
                 onGameweekChange={handleGameweekChange}
               />
             )}
+          </div>
+        )}
+
+        {activeTab === "cup" && (
+          <div className="max-w-4xl mx-auto">
+            {selectedTournament ? (
+              <PublicTournamentViewer
+                tournamentId={selectedTournament}
+                onBack={handleBackToTournaments}
+              />
+            ) : (
+              <PublicTournamentList
+                onTournamentSelect={handleTournamentSelect}
+              />
+            )}
+          </div>
+        )}
+
+        {activeTab === "bases" && (
+          <div className="max-w-4xl mx-auto">
+            <BasesViewer />
           </div>
         )}
       </main>

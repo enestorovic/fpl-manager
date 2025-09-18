@@ -24,7 +24,7 @@ export function AdminLogin({ onLogin }: AdminLoginProps) {
     setError("")
 
     // Simple hardcoded admin code - in production this would be more secure
-    if (code === "letmein123") {
+    if (code === "junglaadmin123") {
       onLogin()
     } else {
       setError("Invalid admin code")

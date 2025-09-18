@@ -38,6 +38,26 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
     fetchTournamentData()
   }, [tournamentId])
 
+  useEffect(() => {
+    // Auto-calculate scores if tournament is active and gameweeks have data
+    if (tournament && tournament.status === 'active') {
+      console.log('Tournament is active, checking for auto-calculation...')
+      autoCalculateScoresIfNeeded()
+    }
+  }, [tournament])
+
+  // Also auto-calculate after data is fetched if tournament is active
+  useEffect(() => {
+    if (tournament && tournament.status === 'active') {
+      console.log('Component mounted with active tournament, auto-calculating...')
+      const timer = setTimeout(() => {
+        autoCalculateScoresIfNeeded()
+      }, 1000) // Small delay to ensure data is loaded
+
+      return () => clearTimeout(timer)
+    }
+  }, [tournament?.status, tournament?.id])
+
   const fetchTournamentData = async () => {
     setLoading(true)
     setError(null)
@@ -87,15 +107,109 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
     }
   }
 
-  const calculateMatchScores = async () => {
+  const fetchFreshTournamentData = async (): Promise<TournamentWithData | null> => {
+    try {
+      // Fetch tournament basic info
+      const { data: tournamentData, error: tournamentError } = await supabase
+        .from('tournaments')
+        .select('*')
+        .eq('id', tournamentId)
+        .single()
+
+      if (tournamentError) throw tournamentError
+
+      // Fetch participants with team data
+      const { data: participantsData, error: participantsError } = await supabase
+        .from('tournament_participants')
+        .select(`
+          *,
+          team:teams(*)
+        `)
+        .eq('tournament_id', tournamentId)
+
+      if (participantsError) throw participantsError
+
+      // Fetch matches
+      const { data: matchesData, error: matchesError } = await supabase
+        .from('tournament_matches')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .order('round_order', { ascending: true })
+        .order('match_order', { ascending: true })
+
+      if (matchesError) throw matchesError
+
+      return {
+        ...tournamentData,
+        participants: participantsData || [],
+        matches: matchesData || []
+      }
+
+    } catch (error) {
+      console.error('Error fetching fresh tournament data:', error)
+      return null
+    }
+  }
+
+  const autoCalculateScoresIfNeeded = async () => {
     if (!tournament) return
 
-    setCalculating(true)
-    setError(null)
+    // Check if any matches need score calculation
+    const matchesToCalculate = tournament.matches.filter(match =>
+      match.team1_id && match.team2_id && match.status !== 'completed'
+    )
+
+    if (matchesToCalculate.length === 0) return
+
+    // Check if gameweek data is available
+    const hasGameweekData = await checkGameweekDataAvailable(tournament.gameweeks)
+    if (hasGameweekData) {
+      console.log('Auto-calculating tournament scores...')
+      await calculateMatchScores(true) // true = silent mode
+    }
+  }
+
+  const checkGameweekDataAvailable = async (gameweeks: number[]): Promise<boolean> => {
+    try {
+      // Check if we have team_summaries data for these gameweeks
+      const { data, error } = await supabase
+        .from('team_summaries')
+        .select('event_number')
+        .in('event_number', gameweeks)
+        .limit(1)
+
+      if (error) return false
+      return data && data.length > 0
+    } catch (error) {
+      console.error('Error checking gameweek data:', error)
+      return false
+    }
+  }
+
+  const calculateMatchScores = async (silent = false) => {
+    if (!tournament) return
+
+    if (!silent) {
+      setCalculating(true)
+      setError(null)
+    }
 
     try {
+      let matchesUpdated = 0
+
+      // Sort matches by round order to process them sequentially
+      const sortedMatches = [...tournament.matches].sort((a, b) => a.round_order - b.round_order)
+
       // Calculate scores for each match
-      for (const match of tournament.matches) {
+      for (const match of sortedMatches) {
+        console.log(`Processing match ${match.id}:`, {
+          team1: match.team1_id,
+          team2: match.team2_id,
+          status: match.status,
+          gameweeks: match.gameweeks,
+          roundName: match.round_name
+        })
+
         if (match.team1_id && match.team2_id && match.status !== 'completed') {
           // Get team summaries for the match gameweeks
           const gameweeks = match.gameweeks
@@ -105,27 +219,45 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
 
           // Sum points across all gameweeks for this match
           for (const gw of gameweeks) {
-            const { data: team1Summary } = await supabase
+            console.log(`Fetching data for GW ${gw}, teams ${match.team1_id} and ${match.team2_id}`)
+
+            const { data: team1Summary, error: team1Error } = await supabase
               .from('team_summaries')
               .select('points')
               .eq('team_id', match.team1_id)
               .eq('event_number', gw)
               .single()
 
-            const { data: team2Summary } = await supabase
+            const { data: team2Summary, error: team2Error } = await supabase
               .from('team_summaries')
               .select('points')
               .eq('team_id', match.team2_id)
               .eq('event_number', gw)
               .single()
 
+            console.log(`GW ${gw} results:`, {
+              team1Points: team1Summary?.points || 0,
+              team2Points: team2Summary?.points || 0,
+              team1Error: team1Error?.message,
+              team2Error: team2Error?.message
+            })
+
             team1Score += team1Summary?.points || 0
             team2Score += team2Summary?.points || 0
           }
 
+          console.log(`Final scores for match ${match.id}:`, {
+            team1Score,
+            team2Score,
+            hasData: team1Score > 0 || team2Score > 0
+          })
+
+          // Update match even if scores are zero (to mark it as processed)
           // Determine winner
           const winnerId = team1Score > team2Score ? match.team1_id :
                           team2Score > team1Score ? match.team2_id : null
+
+          console.log(`Updating match ${match.id} with winner ${winnerId}`)
 
           // Update match with scores
           const { error: updateError } = await supabase
@@ -139,18 +271,148 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
             })
             .eq('id', match.id)
 
-          if (updateError) throw updateError
+          if (updateError) {
+            console.error('Error updating match:', updateError)
+            throw updateError
+          }
+
+          console.log(`Successfully updated match ${match.id}`)
+          matchesUpdated++
+        } else {
+          console.log(`Skipping match ${match.id}: missing teams or already completed`)
         }
       }
 
-      // Refresh tournament data
-      await fetchTournamentData()
+      // After updating matches, advance winners to next rounds
+      if (matchesUpdated > 0) {
+        console.log(`Updated ${matchesUpdated} matches, now advancing winners...`)
+
+        // Fetch fresh tournament data for winner advancement
+        const freshTournamentData = await fetchFreshTournamentData()
+
+        if (freshTournamentData) {
+          // Then advance winners using fresh data
+          await advanceWinnersToNextRounds(freshTournamentData)
+        }
+
+        // Refresh component state to show the advancement results
+        await fetchTournamentData()
+
+        if (!silent) {
+          console.log(`Updated ${matchesUpdated} matches with scores`)
+        }
+      }
 
     } catch (error) {
       console.error('Error calculating scores:', error)
-      setError('Failed to calculate match scores')
+      if (!silent) {
+        setError('Failed to calculate match scores')
+      }
     } finally {
-      setCalculating(false)
+      if (!silent) {
+        setCalculating(false)
+      }
+    }
+  }
+
+  const advanceWinnersToNextRounds = async (tournamentData?: TournamentWithData) => {
+    const currentTournament = tournamentData || tournament
+    if (!currentTournament) return
+
+    try {
+      // Get all completed matches, sorted by round and match order
+      const completedMatches = currentTournament.matches
+        .filter(match => match.status === 'completed' && match.winner_id)
+        .sort((a, b) => a.round_order - b.round_order || a.match_order - b.match_order)
+
+      console.log('Completed matches for advancement:', completedMatches.map(m => ({
+        round: m.round_order,
+        match: m.match_order,
+        winner: m.winner_id
+      })))
+
+      // Group completed matches by round
+      const matchesByRound = completedMatches.reduce((acc, match) => {
+        if (!acc[match.round_order]) acc[match.round_order] = []
+        acc[match.round_order].push(match)
+        return acc
+      }, {} as Record<number, typeof completedMatches>)
+
+      // Process each round
+      for (const [roundStr, roundMatches] of Object.entries(matchesByRound)) {
+        const round = parseInt(roundStr)
+        const nextRound = round + 1
+
+        // Sort current round matches by match_order
+        const sortedRoundMatches = roundMatches.sort((a, b) => a.match_order - b.match_order)
+
+        // Find next round matches that need winners
+        const nextRoundMatches = currentTournament.matches
+          .filter(match => match.round_order === nextRound)
+          .sort((a, b) => a.match_order - b.match_order)
+
+        console.log(`Processing round ${round}:`, {
+          currentRoundMatches: sortedRoundMatches.length,
+          nextRoundMatches: nextRoundMatches.length
+        })
+
+        // Advance winners to next round - every 2 matches feed into 1 next match
+        for (let i = 0; i < sortedRoundMatches.length; i += 2) {
+          const match1 = sortedRoundMatches[i]
+          const match2 = sortedRoundMatches[i + 1]
+          const nextMatchIndex = Math.floor(i / 2)
+          const nextMatch = nextRoundMatches[nextMatchIndex]
+
+          console.log(`Trying to advance from matches ${i} and ${i+1} to next match ${nextMatchIndex}:`, {
+            match1Id: match1?.id,
+            match2Id: match2?.id,
+            nextMatchId: nextMatch?.id,
+            nextMatchTeams: { team1: nextMatch?.team1_id, team2: nextMatch?.team2_id }
+          })
+
+          if (match1 && match2 && nextMatch && !nextMatch.team1_id && !nextMatch.team2_id) {
+            // Both matches completed, advance both winners
+            console.log(`Advancing both winners to match ${nextMatch.id}:`, {
+              team1: match1.winner_id,
+              team2: match2.winner_id
+            })
+
+            const { error } = await supabase
+              .from('tournament_matches')
+              .update({
+                team1_id: match1.winner_id,
+                team2_id: match2.winner_id,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', nextMatch.id)
+
+            if (error) {
+              console.error('Error updating match:', error)
+              throw error
+            }
+          } else if (match1 && nextMatch && !nextMatch.team1_id && !match2) {
+            // Only one match in this pairing (odd number), advance to team1 slot
+            console.log(`Advancing single winner to match ${nextMatch.id}:`, {
+              team1: match1.winner_id
+            })
+
+            const { error } = await supabase
+              .from('tournament_matches')
+              .update({
+                team1_id: match1.winner_id,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', nextMatch.id)
+
+            if (error) {
+              console.error('Error updating match:', error)
+              throw error
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error advancing winners:', error)
     }
   }
 
@@ -260,31 +522,6 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
         </Alert>
       )}
 
-      {/* Calculate Scores Button */}
-      {tournament.status === 'active' && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium">Calculate Match Results</h3>
-                <p className="text-sm text-muted-foreground">
-                  Calculate scores based on gameweek {tournament.gameweeks.join(', ')} performance
-                </p>
-              </div>
-              <Button onClick={calculateMatchScores} disabled={calculating}>
-                {calculating ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Calculating...
-                  </>
-                ) : (
-                  'Calculate Scores'
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Tournament Bracket */}
       <Card>

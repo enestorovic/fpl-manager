@@ -250,9 +250,12 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
 
       // Create bracket matches
       const matchesToCreate = []
-      let roundGameweekIndex = 0
 
       for (const match of generatedBracket) {
+        // Assign gameweek based on round (round 1 = gameweek[0], round 2 = gameweek[1], etc.)
+        const gameweekIndex = match.round - 1
+        const matchGameweek = formData.matchGameweeks[gameweekIndex % formData.matchGameweeks.length]
+
         if (match.isFirstRound) {
           // First round matches get teams assigned
           const team1Position = `${match.id}_team1`
@@ -268,7 +271,7 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
             winner_id: null,
             team1_score: 0,
             team2_score: 0,
-            gameweeks: [formData.matchGameweeks[roundGameweekIndex % formData.matchGameweeks.length]],
+            gameweeks: [matchGameweek],
             status: 'pending',
             team1_from_match: null,
             team2_from_match: null
@@ -285,14 +288,12 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
             winner_id: null,
             team1_score: 0,
             team2_score: 0,
-            gameweeks: [formData.matchGameweeks[roundGameweekIndex % formData.matchGameweeks.length]],
+            gameweeks: [matchGameweek],
             status: 'pending',
             team1_from_match: null,
             team2_from_match: null
           })
         }
-
-        if (match.round > 1) roundGameweekIndex++
       }
 
       const { error: matchesError } = await supabase
@@ -431,91 +432,99 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
                   <div>
                     <Label className="text-base font-medium mb-3 block">First Round Matches</Label>
                     <div className="space-y-4">
-                      {generatedBracket.filter(m => m.isFirstRound).map(match => (
-                        <div key={match.id} className="border rounded p-4">
-                          <h4 className="font-medium mb-3">Match {match.match + 1}</h4>
+                      {generatedBracket.filter(m => m.isFirstRound).map((match, index) => {
+                        const isUpperBracket = index < Math.ceil(generatedBracket.filter(m => m.isFirstRound).length / 2)
+                        return (
+                          <div key={match.id} className={`border rounded p-4 ${isUpperBracket ? 'border-blue-200 bg-blue-50/30' : 'border-green-200 bg-green-50/30'}`}>
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-medium">Match {match.match + 1}</h4>
+                              <Badge variant="outline" className={isUpperBracket ? 'text-blue-600' : 'text-green-600'}>
+                                {isUpperBracket ? 'Upper Bracket' : 'Lower Bracket'}
+                              </Badge>
+                            </div>
 
-                          {/* Team 1 */}
-                          <div className="mb-2">
-                            <Label className="text-sm text-muted-foreground">Team 1</Label>
-                            <Select
-                              value={formData.bracketAssignments[`${match.id}_team1`]?.toString() || undefined}
-                              onValueChange={(value) => {
-                                if (value) {
-                                  assignTeamToPosition(`${match.id}_team1`, parseInt(value))
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Select team..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {[...getAvailableTeams(),
-                                  ...(formData.bracketAssignments[`${match.id}_team1`]
-                                    ? [getTeamById(formData.bracketAssignments[`${match.id}_team1`])]
-                                    : [])
-                                ].filter(Boolean).map(team => (
-                                  <SelectItem key={team!.id} value={team!.id.toString()}>
-                                    {team!.entry_name} (#{team!.rank})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            {formData.bracketAssignments[`${match.id}_team1`] && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeTeamFromPosition(`${match.id}_team1`)}
-                                className="mt-1 text-xs"
+                            {/* Team 1 */}
+                            <div className="mb-2">
+                              <Label className="text-sm text-muted-foreground">Team 1</Label>
+                              <Select
+                                value={formData.bracketAssignments[`${match.id}_team1`]?.toString() || undefined}
+                                onValueChange={(value) => {
+                                  if (value) {
+                                    assignTeamToPosition(`${match.id}_team1`, parseInt(value))
+                                  }
+                                }}
                               >
-                                Clear
-                              </Button>
-                            )}
-                          </div>
+                                <SelectTrigger className="mt-1">
+                                  <SelectValue placeholder="Select team..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {[...getAvailableTeams(),
+                                    ...(formData.bracketAssignments[`${match.id}_team1`]
+                                      ? [getTeamById(formData.bracketAssignments[`${match.id}_team1`])]
+                                      : [])
+                                  ].filter(Boolean).map(team => (
+                                    <SelectItem key={team!.id} value={team!.id.toString()}>
+                                      {team!.entry_name} (#{team!.rank})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {formData.bracketAssignments[`${match.id}_team1`] && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeTeamFromPosition(`${match.id}_team1`)}
+                                  className="mt-1 text-xs"
+                                >
+                                  Clear
+                                </Button>
+                              )}
+                            </div>
 
-                          <div className="text-center text-sm text-muted-foreground my-2">vs</div>
+                            <div className="text-center text-sm text-muted-foreground my-2">vs</div>
 
-                          {/* Team 2 */}
-                          <div>
-                            <Label className="text-sm text-muted-foreground">Team 2</Label>
-                            <Select
-                              value={formData.bracketAssignments[`${match.id}_team2`]?.toString() || undefined}
-                              onValueChange={(value) => {
-                                if (value) {
-                                  assignTeamToPosition(`${match.id}_team2`, parseInt(value))
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Select team..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {[...getAvailableTeams(),
-                                  ...(formData.bracketAssignments[`${match.id}_team2`]
-                                    ? [getTeamById(formData.bracketAssignments[`${match.id}_team2`])]
-                                    : [])
-                                ].filter(Boolean).map(team => (
-                                  <SelectItem key={team!.id} value={team!.id.toString()}>
-                                    {team!.entry_name} (#{team!.rank})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            {formData.bracketAssignments[`${match.id}_team2`] && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeTeamFromPosition(`${match.id}_team2`)}
-                                className="mt-1 text-xs"
+                            {/* Team 2 */}
+                            <div>
+                              <Label className="text-sm text-muted-foreground">Team 2</Label>
+                              <Select
+                                value={formData.bracketAssignments[`${match.id}_team2`]?.toString() || undefined}
+                                onValueChange={(value) => {
+                                  if (value) {
+                                    assignTeamToPosition(`${match.id}_team2`, parseInt(value))
+                                  }
+                                }}
                               >
-                                Clear
-                              </Button>
-                            )}
+                                <SelectTrigger className="mt-1">
+                                  <SelectValue placeholder="Select team..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {[...getAvailableTeams(),
+                                    ...(formData.bracketAssignments[`${match.id}_team2`]
+                                      ? [getTeamById(formData.bracketAssignments[`${match.id}_team2`])]
+                                      : [])
+                                  ].filter(Boolean).map(team => (
+                                    <SelectItem key={team!.id} value={team!.id.toString()}>
+                                      {team!.entry_name} (#{team!.rank})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {formData.bracketAssignments[`${match.id}_team2`] && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeTeamFromPosition(`${match.id}_team2`)}
+                                  className="mt-1 text-xs"
+                                >
+                                  Clear
+                                </Button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
@@ -523,7 +532,7 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
                 {/* Tournament Bracket Preview */}
                 <div className="mt-6 p-4 bg-muted/30 rounded">
                   <h4 className="font-medium mb-3">Tournament Structure</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
                     {Array.from(new Set(generatedBracket.map(m => m.round))).map(round => (
                       <div key={round}>
                         <p className="font-medium">
@@ -532,8 +541,33 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
                         <p className="text-muted-foreground">
                           {generatedBracket.filter(m => m.round === round).length} matches
                         </p>
+                        <p className="text-xs text-muted-foreground">
+                          GW {formData.matchGameweeks[round - 1] || formData.matchGameweeks[(round - 1) % formData.matchGameweeks.length]}
+                        </p>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Bracket Side Indicators */}
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <p className="font-medium text-blue-600 mb-2">Upper Bracket</p>
+                      {generatedBracket.filter(m => m.isFirstRound).slice(0, Math.ceil(generatedBracket.filter(m => m.isFirstRound).length / 2)).map(match => (
+                        <div key={match.id} className="flex items-center justify-between p-1 bg-blue-50 rounded mb-1">
+                          <span>Match {match.match + 1}</span>
+                          <span className="text-muted-foreground">→ Upper Semi</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <p className="font-medium text-green-600 mb-2">Lower Bracket</p>
+                      {generatedBracket.filter(m => m.isFirstRound).slice(Math.ceil(generatedBracket.filter(m => m.isFirstRound).length / 2)).map(match => (
+                        <div key={match.id} className="flex items-center justify-between p-1 bg-green-50 rounded mb-1">
+                          <span>Match {match.match + 1}</span>
+                          <span className="text-muted-foreground">→ Lower Semi</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
