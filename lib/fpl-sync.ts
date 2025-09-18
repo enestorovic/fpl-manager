@@ -101,6 +101,8 @@ export class FPLSyncService {
       .upsert({
         ...metadataData,
         last_updated: new Date().toISOString()
+      }, {
+        onConflict: 'league_id'
       })
 
     if (error) {

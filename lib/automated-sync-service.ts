@@ -193,13 +193,17 @@ export class AutomatedSyncService {
       }
       await this.upsertLeagueMetadata(metadataData)
 
-      // 4. Sync detailed data for current gameweek only (efficiency)
+      // 4. Sync detailed data for all completed gameweeks + current gameweek
       const currentEvent = bootstrapData.events.find(e => e.is_current)
       let summariesUpdated = 0
       let chipsUpdated = 0
 
-      if (currentEvent && !currentEvent.finished) {
-        const result = await this.syncCurrentGameweekData(validTeams, currentEvent.id)
+      if (currentEvent) {
+        // Sync data for all finished gameweeks plus current
+        const completedEvents = bootstrapData.events.filter(e => e.finished || e.is_current)
+        console.log(`[AutoSync] Syncing detailed data for ${completedEvents.length} gameweeks`)
+
+        const result = await this.syncAllTeamsAllGameweeks(validTeams, completedEvents)
         summariesUpdated = result.summariesUpdated
         chipsUpdated = result.chipsUpdated
       }
@@ -443,6 +447,8 @@ export class AutomatedSyncService {
       .upsert({
         ...metadataData,
         last_updated: new Date().toISOString()
+      }, {
+        onConflict: 'league_id'
       })
 
     if (error) {
@@ -563,6 +569,89 @@ export class AutomatedSyncService {
       activeSync: activeSyncResult.data?.[0] || null,
       recentErrors: errorsResult.data || [],
       avgDuration
+    }
+  }
+
+  // Helper: Sync all teams for all completed gameweeks using REAL FPL API data
+  private async syncAllTeamsAllGameweeks(
+    teams: Omit<Team, 'created_at' | 'updated_at'>[],
+    events: any[]
+  ): Promise<{ summariesUpdated: number, chipsUpdated: number }> {
+    console.log(`[AutoSync] Syncing REAL data for ${teams.length} teams from FPL API`)
+
+    let totalSummariesUpdated = 0
+    let totalChipsUpdated = 0
+
+    // Fetch real data for each team from FPL API
+    for (const team of teams) {
+      try {
+        console.log(`[AutoSync] Fetching real data for team ${team.id} (${team.entry_name})`)
+
+        // Get real manager history and details from FPL API
+        const [historyData, managerData] = await Promise.all([
+          fplDataService.getManagerHistory(team.id),
+          fplDataService.getManagerDetails(team.id)
+        ])
+        this.apiCallCount += 2
+
+        // Map the REAL history data to summaries
+        const summariesData = mapManagerHistoryToSummaries(historyData, team.id)
+
+        // Map the REAL chips data
+        const chipsData = mapChipsToDatabase(historyData, team.id)
+
+        // Add chip information to summaries
+        const enrichedSummaries = addChipsToSummaries(summariesData, chipsData)
+
+        // Validate and insert real data
+        const validSummaries = enrichedSummaries.filter(validateTeamSummary)
+
+        if (validSummaries.length > 0) {
+          const summariesWithTimestamps = validSummaries.map(summary => ({
+            ...summary,
+            created_at: new Date().toISOString()
+          }))
+
+          const { error: summariesError } = await supabase
+            .from('team_summaries')
+            .upsert(summariesWithTimestamps, { onConflict: 'team_id,event_number' })
+
+          if (summariesError) {
+            console.error(`[AutoSync] Failed to update summaries for team ${team.id}:`, summariesError)
+          } else {
+            totalSummariesUpdated += validSummaries.length
+          }
+        }
+
+        // Insert real chips data
+        if (chipsData.length > 0) {
+          const { error: chipsError } = await supabase
+            .from('chips')
+            .upsert(chipsData, { onConflict: 'team_id,chip_type,event_number' })
+
+          if (chipsError) {
+            console.error(`[AutoSync] Failed to update chips for team ${team.id}:`, chipsError)
+          } else {
+            totalChipsUpdated += chipsData.length
+          }
+        }
+
+        console.log(`[AutoSync] ✅ Synced real data for team ${team.id}: ${validSummaries.length} summaries, ${chipsData.length} chips`)
+
+        // Add small delay to avoid hitting API rate limits
+        await new Promise(resolve => setTimeout(resolve, 100))
+
+      } catch (error) {
+        console.error(`[AutoSync] ❌ Failed to fetch real data for team ${team.id}:`, error)
+        // Continue with next team instead of failing entire sync
+      }
+    }
+
+    console.log(`[AutoSync] Completed real data sync: ${totalSummariesUpdated} summaries, ${totalChipsUpdated} chips`)
+
+    return {
+      summariesUpdated: totalSummariesUpdated,
+      chipsUpdated: totalChipsUpdated
     }
   }
 }

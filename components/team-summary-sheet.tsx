@@ -174,24 +174,26 @@ export function TeamSummarySheet({ team, open, onOpenChange }: TeamSummarySheetP
 
                   <Separator />
 
-                  {/* Chips Used */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-base font-medium">
-                      <Zap className="h-5 w-5" />
-                      Chips Used This Season
-                    </div>
-                    {chips.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {chips.map((chip) => (
-                          <Badge key={chip.id} variant="outline" className="text-sm px-3 py-1">
-                            {chip.chip_type.toUpperCase()} (GW{chip.event_number})
-                          </Badge>
-                        ))}
+                  {/* Chips Used - Temporarily Hidden */}
+                  {false && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-base font-medium">
+                        <Zap className="h-5 w-5" />
+                        Chips Used This Season
                       </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No chips data available</p>
-                    )}
-                  </div>
+                      {chips.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {chips.map((chip) => (
+                            <Badge key={chip.id} variant="outline" className="text-sm px-3 py-1">
+                              {chip.chip_type.toUpperCase()} (GW{chip.event_number})
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No chips data available</p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Current Chip */}
                   {summary?.chip_used && (

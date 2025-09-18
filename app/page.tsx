@@ -17,7 +17,7 @@ export default function Home() {
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [showTeamSheet, setShowTeamSheet] = useState(false)
   const [teams, setTeams] = useState<Team[]>([])
-  const [sortBy, setSortBy] = useState<"event_total" | "total">("total") // Updated default value
+  const [sortBy, setSortBy] = useState<"event_total" | "total">("total")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAdmin, setShowAdmin] = useState(false)
@@ -46,11 +46,10 @@ export default function Home() {
       // Set default to current gameweek, fall back to latest available
       if (gameweeks.includes(currentGW)) {
         setSelectedGameweek(currentGW)
-        setSortBy("event_total") // Default to current GW score when showing current gameweek
       } else if (gameweeks.length > 0) {
         setSelectedGameweek(gameweeks[gameweeks.length - 1])
-        setSortBy("total") // Default to total when not showing current gameweek
       }
+      // Always default to total score sorting
     } catch (error) {
       console.error("Error fetching gameweeks:", error)
     }

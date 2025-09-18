@@ -62,7 +62,7 @@ git push origin api-events
 5. Click "Deploy"
 
 ### Step 3: Database Migration
-Once deployed, run this SQL in your Supabase SQL Editor:
+Once deployed, run this 	I SQL in your Supabase SQL Editor:
 
 ```sql
 -- Copy and paste the entire contents of:

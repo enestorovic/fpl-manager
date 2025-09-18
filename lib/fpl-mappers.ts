@@ -46,18 +46,19 @@ export function mapLeagueStandingsToTeams(
 
 // Map FPL league metadata to database schema
 export function mapLeagueMetadata(
-  standingsData: FPLLeagueStandingsResponse
+  standingsData: FPLLeagueStandingsResponse,
+  currentEvent?: number
 ): Omit<LeagueMetadata, 'id' | 'last_updated'> {
   // Get total entries from standings or new_entries
-  const totalEntries = standingsData.standings.results.length > 0 
-    ? standingsData.standings.results.length 
+  const totalEntries = standingsData.standings.results.length > 0
+    ? standingsData.standings.results.length
     : standingsData.new_entries?.results.length || 0
 
   return {
     league_id: standingsData.league.id,
     league_name: standingsData.league.name,
     total_entries: totalEntries,
-    current_event: standingsData.league.start_event || 1 // Use start_event from API, fallback to 1
+    current_event: currentEvent || standingsData.league.start_event || 1 // Use passed current event, fallback to start_event
   }
 }
 
