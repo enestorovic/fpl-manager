@@ -22,6 +22,7 @@ import {
 import { supabase } from "@/lib/supabase"
 import type { Tournament } from "@/lib/supabase"
 import { TournamentCreateForm } from "@/components/tournament-create-form-v2"
+import { TournamentViewer } from "@/components/tournament-viewer"
 
 interface TournamentAdminProps {
   onBack: () => void
@@ -32,6 +33,7 @@ export function TournamentAdmin({ onBack }: TournamentAdminProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [viewingTournament, setViewingTournament] = useState<number | null>(null)
 
   useEffect(() => {
     fetchTournaments()
@@ -132,6 +134,17 @@ export function TournamentAdmin({ onBack }: TournamentAdminProps) {
             setShowCreateForm(false)
             fetchTournaments()
           }}
+        />
+      </div>
+    )
+  }
+
+  if (viewingTournament) {
+    return (
+      <div className="min-h-screen p-4 bg-muted/30">
+        <TournamentViewer
+          tournamentId={viewingTournament}
+          onBack={() => setViewingTournament(null)}
         />
       </div>
     )
@@ -275,7 +288,11 @@ export function TournamentAdmin({ onBack }: TournamentAdminProps) {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setViewingTournament(tournament.id)}
+                        >
                           <Eye className="h-4 w-4" />
                         </Button>
 
