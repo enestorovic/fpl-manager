@@ -21,7 +21,7 @@ import {
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { Tournament } from "@/lib/supabase"
-import { TournamentCreateForm } from "@/components/tournament-create-form"
+import { TournamentCreateForm } from "@/components/tournament-create-form-v2"
 
 interface TournamentAdminProps {
   onBack: () => void

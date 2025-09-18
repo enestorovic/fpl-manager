@@ -39,6 +39,8 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
   const [error, setError] = useState<string | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
   const [availableGameweeks] = useState(Array.from({ length: 38 }, (_, i) => i + 1))
+  const [currentStep, setCurrentStep] = useState(1)
+  const [generatedBracket, setGeneratedBracket] = useState<any[]>([])
 
   // Form state
   const [formData, setFormData] = useState({
@@ -46,6 +48,7 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
     description: '',
     type: '' as 'group' | 'knockout' | 'mixed' | '',
     gameweeks: [] as number[],
+    totalTeams: 8, // New field for knockout tournaments
 
     // Group settings
     numGroups: 4,
@@ -59,7 +62,8 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
 
     // Participant settings
     selectedTeams: [] as number[],
-    groupAssignments: {} as Record<number, number> // teamId -> groupIndex
+    groupAssignments: {} as Record<number, number>, // teamId -> groupIndex
+    bracketAssignments: {} as Record<number, number> // matchId -> teamId
   })
 
   useEffect(() => {
@@ -120,29 +124,101 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
     setFormData(prev => ({ ...prev, groupAssignments: newAssignments }))
   }
 
-  const validateForm = (): string | null => {
+  const generateBracket = () => {
+    const { totalTeams } = formData
+
+    // Calculate number of rounds needed
+    const rounds = Math.ceil(Math.log2(totalTeams))
+    const bracket = []
+
+    // Generate matches for each round
+    let currentRoundMatches = Math.floor(totalTeams / 2)
+
+    for (let round = 1; round <= rounds; round++) {
+      const roundName = getRoundName(round, rounds)
+
+      for (let match = 0; match < currentRoundMatches; match++) {
+        bracket.push({
+          id: `round_${round}_match_${match}`,
+          round,
+          roundName,
+          match,
+          team1: null,
+          team2: null,
+          isFirstRound: round === 1
+        })
+      }
+
+      currentRoundMatches = Math.ceil(currentRoundMatches / 2)
+    }
+
+    setGeneratedBracket(bracket)
+  }
+
+  const getRoundName = (round: number, totalRounds: number): string => {
+    if (round === totalRounds) return 'Final'
+    if (round === totalRounds - 1) return 'Semi-Final'
+    if (round === totalRounds - 2) return 'Quarter-Final'
+    if (round === totalRounds - 3) return 'Round of 16'
+    return `Round ${round}`
+  }
+
+  const validateStep1 = (): string | null => {
     if (!formData.name.trim()) return 'Tournament name is required'
     if (!formData.type) return 'Tournament type is required'
     if (formData.gameweeks.length === 0) return 'At least one gameweek must be selected'
-    if (formData.selectedTeams.length < 2) return 'At least 2 teams must be selected'
-
-    if (formData.type === 'group' || formData.type === 'mixed') {
-      if (formData.selectedTeams.length < formData.numGroups * 2) {
-        return `Need at least ${formData.numGroups * 2} teams for ${formData.numGroups} groups`
-      }
-    }
 
     if (formData.type === 'knockout' || formData.type === 'mixed') {
       if (formData.knockoutGameweeks.length === 0) {
         return 'Knockout gameweeks must be selected'
+      }
+      if (formData.totalTeams < 2 || formData.totalTeams > 32) {
+        return 'Total teams must be between 2 and 32'
       }
     }
 
     return null
   }
 
+  const validateStep2 = (): string | null => {
+    if (formData.type === 'knockout') {
+      const assignedTeams = Object.values(formData.bracketAssignments).filter(Boolean)
+      if (assignedTeams.length !== formData.totalTeams) {
+        return `Please assign all ${formData.totalTeams} teams to bracket positions`
+      }
+      // Check for duplicate assignments
+      const uniqueTeams = new Set(assignedTeams)
+      if (uniqueTeams.size !== assignedTeams.length) {
+        return 'Each team can only be assigned once'
+      }
+    } else {
+      if (formData.selectedTeams.length < 2) return 'At least 2 teams must be selected'
+    }
+    return null
+  }
+
+  const handleNext = () => {
+    const validationError = validateStep1()
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    if (formData.type === 'knockout') {
+      generateBracket()
+    }
+
+    setError(null)
+    setCurrentStep(2)
+  }
+
+  const handleBack = () => {
+    setCurrentStep(1)
+    setError(null)
+  }
+
   const handleSubmit = async () => {
-    const validationError = validateForm()
+    const validationError = validateStep2()
     if (validationError) {
       setError(validationError)
       return
