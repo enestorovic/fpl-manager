@@ -98,7 +98,12 @@ export default function Home() {
   }
 
   if (showAdmin && !isAdmin) {
-    return <AdminLogin onLogin={() => setIsAdmin(true)} />
+    return (
+      <AdminLogin
+        onLogin={() => setIsAdmin(true)}
+        onCancel={() => setShowAdmin(false)}
+      />
+    )
   }
 
   if (isAdmin) {
