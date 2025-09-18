@@ -6,24 +6,26 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { 
-  RefreshCw, 
-  Database, 
-  Users, 
-  Calendar, 
-  LogOut, 
-  Trash2, 
-  AlertTriangle, 
+import {
+  RefreshCw,
+  Database,
+  Users,
+  Calendar,
+  LogOut,
+  Trash2,
+  AlertTriangle,
   Clock,
   Activity,
   CheckCircle,
   XCircle,
   Zap,
-  Settings
+  Settings,
+  Trophy
 } from "lucide-react"
 import { getLeagueMetadata, getDatabaseStatus } from "@/lib/database"
 import { supabase } from "@/lib/supabase"
 import type { LeagueMetadata, SyncLog } from "@/lib/supabase"
+import { TournamentAdmin } from "@/components/tournament-admin"
 
 interface AutomatedAdminPanelProps {
   onLogout: () => void
@@ -37,6 +39,7 @@ interface SyncStatus {
 }
 
 export function AutomatedAdminPanel({ onLogout }: AutomatedAdminPanelProps) {
+  const [showTournaments, setShowTournaments] = useState(false)
   const [metadata, setMetadata] = useState<LeagueMetadata | null>(null)
   const [dbStatus, setDbStatus] = useState({ teams: 0, metadata: 0, summaries: 0, chips: 0, events: 0, sync_logs: 0 })
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
@@ -203,16 +206,27 @@ export function AutomatedAdminPanel({ onLogout }: AutomatedAdminPanelProps) {
     }
   }
 
+  // Show tournament admin if requested
+  if (showTournaments) {
+    return <TournamentAdmin onBack={() => setShowTournaments(false)} />
+  }
+
   return (
     <div className="min-h-screen p-4 bg-muted/30">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Automated FPL Admin Panel</h1>
-          <Button variant="outline" onClick={onLogout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowTournaments(true)}>
+              <Trophy className="h-4 w-4 mr-2" />
+              Tournaments
+            </Button>
+            <Button variant="outline" onClick={onLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* Sync Status Overview */}

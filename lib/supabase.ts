@@ -92,3 +92,88 @@ export type SyncConfig = {
   description: string | null
   updated_at: string
 }
+
+// Tournament/Cup types
+export type Tournament = {
+  id: number
+  name: string
+  description: string | null
+  type: 'group' | 'knockout' | 'mixed'
+  status: 'draft' | 'active' | 'completed' | 'cancelled'
+
+  // Scoring settings
+  gameweeks: number[]
+
+  // Group stage settings
+  num_groups: number | null
+  teams_per_group: number | null
+  teams_advance_per_group: number
+  include_best_third: boolean
+
+  // Knockout settings
+  knockout_gameweeks: number[] | null
+  knockout_legs: number
+
+  // Metadata
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  started_at: string | null
+  completed_at: string | null
+}
+
+export type TournamentGroup = {
+  id: number
+  tournament_id: number
+  group_name: string
+  group_order: number
+  created_at: string
+}
+
+export type TournamentParticipant = {
+  id: number
+  tournament_id: number
+  team_id: number
+  group_id: number | null
+  group_position: number | null
+  tournament_position: number | null
+  eliminated_in_round: string | null
+  created_at: string
+}
+
+export type TournamentMatch = {
+  id: number
+  tournament_id: number
+  round_name: string
+  round_order: number
+  match_order: number
+  team1_id: number | null
+  team2_id: number | null
+  winner_id: number | null
+  team1_score: number
+  team2_score: number
+  gameweeks: number[]
+  status: 'pending' | 'active' | 'completed'
+  team1_from_match: number | null
+  team2_from_match: number | null
+  created_at: string
+  updated_at: string
+}
+
+export type TournamentStanding = {
+  id: number
+  tournament_id: number
+  team_id: number
+  group_id: number | null
+  matches_played: number
+  wins: number
+  draws: number
+  losses: number
+  points_for: number
+  points_against: number
+  tournament_points: number
+  position: number | null
+  qualified: boolean
+  points_difference: number
+  updated_at: string
+}
