@@ -259,8 +259,67 @@ export async function getCurrentGameweek(): Promise<number> {
   if (metadata && metadata.current_event) {
     return metadata.current_event
   }
-  
+
   // Fallback: get the latest gameweek from available data
   const gameweeks = await getAvailableGameweeks()
   return gameweeks.length > 0 ? gameweeks[gameweeks.length - 1] : 1
+}
+
+// Enhanced functions for team stats
+export async function getTeamSeasonStats(teamId: number) {
+  // Get all summaries for this team
+  const { data: summaries, error } = await supabase
+    .from("team_summaries")
+    .select("*")
+    .eq("team_id", teamId)
+    .order("event_number", { ascending: true })
+
+  if (error) {
+    console.error("Database error:", error)
+    throw error
+  }
+
+  if (!summaries || summaries.length === 0) {
+    return null
+  }
+
+  // Calculate total transfer hits
+  const totalTransferHits = summaries.reduce((sum, summary) => sum + (summary.transfers_cost || 0), 0)
+
+  // Find best and worst gameweeks
+  const bestGW = summaries.reduce((best, current) =>
+    current.points > best.points ? current : best
+  )
+
+  const worstGW = summaries.reduce((worst, current) =>
+    current.points < worst.points ? current : worst
+  )
+
+  // Calculate average points
+  const totalPoints = summaries.reduce((sum, summary) => sum + summary.points, 0)
+  const averagePoints = Math.round(totalPoints / summaries.length)
+
+  return {
+    totalTransferHits,
+    bestGW: {
+      points: bestGW.points,
+      gameweek: bestGW.event_number
+    },
+    worstGW: {
+      points: worstGW.points,
+      gameweek: worstGW.event_number
+    },
+    averagePoints,
+    gameweeksPlayed: summaries.length
+  }
+}
+
+export async function getTeamCaptainStats(teamId: number) {
+  // This would require captain data which we might not have yet
+  // For now, return a placeholder that we can enhance later when we have captain data
+  return {
+    totalCaptainPoints: null, // Will implement when we have captain data
+    bestCaptainChoice: null,
+    captainConsistency: null
+  }
 }

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { TrendingUp, Users, DollarSign, Zap, Trophy, Target, AlertCircle } from "lucide-react"
-import { getTeamSummary, getTeamChips } from "@/lib/database"
+import { getTeamSummary, getTeamChips, getCurrentGameweek, getTeamSeasonStats, getTeamCaptainStats } from "@/lib/database"
 import type { Team, Chip, TeamSummary as TeamSummaryType } from "@/lib/supabase"
 
 interface TeamSummarySheetProps {
@@ -18,6 +18,8 @@ interface TeamSummarySheetProps {
 export function TeamSummarySheet({ team, open, onOpenChange }: TeamSummarySheetProps) {
   const [summary, setSummary] = useState<TeamSummaryType | null>(null)
   const [chips, setChips] = useState<Chip[]>([])
+  const [seasonStats, setSeasonStats] = useState<any>(null)
+  const [currentGameweek, setCurrentGameweek] = useState<number>(38)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -33,12 +35,16 @@ export function TeamSummarySheet({ team, open, onOpenChange }: TeamSummarySheetP
       setLoading(true)
       setError(null)
       try {
-        const [summaryData, chipsData] = await Promise.all([
+        const [currentGW, summaryData, chipsData, seasonStatsData] = await Promise.all([
+          getCurrentGameweek().catch(() => 38),
           getTeamSummary(team.id).catch(() => null),
           getTeamChips(team.id).catch(() => []),
+          getTeamSeasonStats(team.id).catch(() => null),
         ])
+        setCurrentGameweek(currentGW)
         setSummary(summaryData)
         setChips(chipsData)
+        setSeasonStats(seasonStatsData)
       } catch (error) {
         console.error("Error fetching team data:", error)
         setError("Failed to load team details")
@@ -102,7 +108,7 @@ export function TeamSummarySheet({ team, open, onOpenChange }: TeamSummarySheetP
                 <>
                   {/* GW Score - Large Display */}
                   <div className="text-center py-4 bg-muted/30 rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-1">GW38 Score</div>
+                    <div className="text-sm text-muted-foreground mb-1">GW{currentGameweek} Score</div>
                     <div className="text-4xl font-bold text-primary">{team.event_total}</div>
                   </div>
 
@@ -111,7 +117,7 @@ export function TeamSummarySheet({ team, open, onOpenChange }: TeamSummarySheetP
                     <div className="text-center p-4 bg-muted/30 rounded-lg">
                       <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-2">
                         <Target className="h-4 w-4" />
-                        Total Points
+                        Current Total
                       </div>
                       <div className="text-2xl font-semibold">{team.total.toLocaleString()}</div>
                     </div>
@@ -132,7 +138,7 @@ export function TeamSummarySheet({ team, open, onOpenChange }: TeamSummarySheetP
                         <div className="text-center p-4 bg-muted/30 rounded-lg">
                           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-2">
                             <Users className="h-4 w-4" />
-                            GW38 Transfers
+                            GW{currentGameweek} Transfers
                           </div>
                           <div className="text-xl font-semibold">
                             {summary.transfers}
@@ -165,6 +171,52 @@ export function TeamSummarySheet({ team, open, onOpenChange }: TeamSummarySheetP
                           <div className="text-xl font-semibold">£{(summary.bank / 10).toFixed(1)}m</div>
                         </div>
                       </div>
+
+                      {/* Season Performance Stats */}
+                      {seasonStats && (
+                        <>
+                          <Separator />
+                          <div className="space-y-3">
+                            <div className="text-base font-medium">Season Performance</div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="text-center p-4 bg-muted/30 rounded-lg">
+                                <div className="text-sm text-muted-foreground mb-2">Best GW</div>
+                                <div className="text-xl font-semibold text-green-600">
+                                  {seasonStats.bestGW.points} pts
+                                </div>
+                                <div className="text-xs text-muted-foreground">GW{seasonStats.bestGW.gameweek}</div>
+                              </div>
+                              <div className="text-center p-4 bg-muted/30 rounded-lg">
+                                <div className="text-sm text-muted-foreground mb-2">Worst GW</div>
+                                <div className="text-xl font-semibold text-red-600">
+                                  {seasonStats.worstGW.points} pts
+                                </div>
+                                <div className="text-xs text-muted-foreground">GW{seasonStats.worstGW.gameweek}</div>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="text-center p-4 bg-muted/30 rounded-lg">
+                                <div className="text-sm text-muted-foreground mb-2">Transfer Hits</div>
+                                <div className="text-xl font-semibold">
+                                  {seasonStats.totalTransferHits > 0 ? (
+                                    <span className="text-red-500">-{seasonStats.totalTransferHits}</span>
+                                  ) : (
+                                    <span className="text-green-600">0</span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-muted-foreground">Season total</div>
+                              </div>
+                              <div className="text-center p-4 bg-muted/30 rounded-lg">
+                                <div className="text-sm text-muted-foreground mb-2">Average</div>
+                                <div className="text-xl font-semibold">
+                                  {seasonStats.averagePoints} pts
+                                </div>
+                                <div className="text-xs text-muted-foreground">Per gameweek</div>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </>
                   ) : (
                     <div className="text-center py-6 text-muted-foreground bg-muted/30 rounded-lg">
@@ -255,11 +307,11 @@ export function TeamSummarySheet({ team, open, onOpenChange }: TeamSummarySheetP
                         <div className="text-sm font-medium text-muted-foreground mb-3">Available Data</div>
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between">
-                            <span>Final total:</span>
+                            <span>Current total:</span>
                             <span className="font-medium">{team.total.toLocaleString()} points</span>
                           </div>
                           <div className="flex justify-between">
-                            <span>GW38 score:</span>
+                            <span>GW{currentGameweek} score:</span>
                             <span className="font-medium">{team.event_total} points</span>
                           </div>
                           <div className="flex justify-between">

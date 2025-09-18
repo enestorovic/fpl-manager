@@ -26,6 +26,7 @@ import { getLeagueMetadata, getDatabaseStatus } from "@/lib/database"
 import { supabase } from "@/lib/supabase"
 import type { LeagueMetadata, SyncLog } from "@/lib/supabase"
 import { TournamentAdmin } from "@/components/tournament-admin"
+import { AdminDataViewer } from "@/components/admin-data-viewer"
 
 interface AutomatedAdminPanelProps {
   onLogout: () => void
@@ -40,6 +41,7 @@ interface SyncStatus {
 
 export function AutomatedAdminPanel({ onLogout }: AutomatedAdminPanelProps) {
   const [showTournaments, setShowTournaments] = useState(false)
+  const [showDataViewer, setShowDataViewer] = useState(false)
   const [metadata, setMetadata] = useState<LeagueMetadata | null>(null)
   const [dbStatus, setDbStatus] = useState({ teams: 0, metadata: 0, summaries: 0, chips: 0, events: 0, sync_logs: 0 })
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
@@ -211,6 +213,25 @@ export function AutomatedAdminPanel({ onLogout }: AutomatedAdminPanelProps) {
     return <TournamentAdmin onBack={() => setShowTournaments(false)} />
   }
 
+  if (showDataViewer) {
+    return (
+      <div className="min-h-screen p-4 bg-muted/30">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="flex items-center justify-between">
+            <Button variant="outline" onClick={() => setShowDataViewer(false)}>
+              ← Back to Admin
+            </Button>
+            <Button variant="outline" onClick={onLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </div>
+          <AdminDataViewer />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen p-4 bg-muted/30">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -221,6 +242,10 @@ export function AutomatedAdminPanel({ onLogout }: AutomatedAdminPanelProps) {
             <Button variant="outline" onClick={() => setShowTournaments(true)}>
               <Trophy className="h-4 w-4 mr-2" />
               Tournaments
+            </Button>
+            <Button variant="outline" onClick={() => setShowDataViewer(true)}>
+              <Database className="h-4 w-4 mr-2" />
+              Data Viewer
             </Button>
             <Button variant="outline" onClick={onLogout}>
               <LogOut className="h-4 w-4 mr-2" />
