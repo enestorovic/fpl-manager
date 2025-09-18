@@ -55,9 +55,8 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
     name: '',
     description: '',
     type: 'knockout' as 'knockout', // Start with knockout only for now
-    gameweeks: [] as number[],
     totalTeams: 8,
-    knockoutGameweeks: [] as number[],
+    matchGameweeks: [] as number[], // Simplified: just the gameweeks used for matches
     bracketAssignments: {} as Record<string, number> // matchPosition -> teamId
   })
 
@@ -116,28 +115,18 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
     return `Round ${round}`
   }
 
-  const handleGameweekToggle = (gameweek: number) => {
+  const handleMatchGameweekToggle = (gameweek: number) => {
     setFormData(prev => ({
       ...prev,
-      gameweeks: prev.gameweeks.includes(gameweek)
-        ? prev.gameweeks.filter(gw => gw !== gameweek)
-        : [...prev.gameweeks, gameweek].sort((a, b) => a - b)
-    }))
-  }
-
-  const handleKnockoutGameweekToggle = (gameweek: number) => {
-    setFormData(prev => ({
-      ...prev,
-      knockoutGameweeks: prev.knockoutGameweeks.includes(gameweek)
-        ? prev.knockoutGameweeks.filter(gw => gw !== gameweek)
-        : [...prev.knockoutGameweeks, gameweek].sort((a, b) => a - b)
+      matchGameweeks: prev.matchGameweeks.includes(gameweek)
+        ? prev.matchGameweeks.filter(gw => gw !== gameweek)
+        : [...prev.matchGameweeks, gameweek].sort((a, b) => a - b)
     }))
   }
 
   const validateStep1 = (): string | null => {
     if (!formData.name.trim()) return 'Tournament name is required'
-    if (formData.gameweeks.length === 0) return 'At least one tournament gameweek must be selected'
-    if (formData.knockoutGameweeks.length === 0) return 'At least one knockout gameweek must be selected'
+    if (formData.matchGameweeks.length === 0) return 'At least one gameweek must be selected for matches'
     if (formData.totalTeams < 2 || formData.totalTeams > 32) return 'Total teams must be between 2 and 32'
     if (!isPowerOfTwo(formData.totalTeams)) return 'Total teams must be a power of 2 (2, 4, 8, 16, 32)'
     return null
@@ -230,8 +219,8 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
           name: formData.name,
           description: formData.description || null,
           type: formData.type,
-          gameweeks: formData.gameweeks,
-          knockout_gameweeks: formData.knockoutGameweeks,
+          gameweeks: formData.matchGameweeks, // Use same gameweeks for both
+          knockout_gameweeks: formData.matchGameweeks, // Use same gameweeks for both
           knockout_legs: 1,
           created_by: 'admin',
           status: 'draft',
@@ -279,7 +268,7 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
             winner_id: null,
             team1_score: 0,
             team2_score: 0,
-            gameweeks: [formData.knockoutGameweeks[roundGameweekIndex % formData.knockoutGameweeks.length]],
+            gameweeks: [formData.matchGameweeks[roundGameweekIndex % formData.matchGameweeks.length]],
             status: 'pending',
             team1_from_match: null,
             team2_from_match: null
@@ -296,7 +285,7 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
             winner_id: null,
             team1_score: 0,
             team2_score: 0,
-            gameweeks: [formData.knockoutGameweeks[roundGameweekIndex % formData.knockoutGameweeks.length]],
+            gameweeks: [formData.matchGameweeks[roundGameweekIndex % formData.matchGameweeks.length]],
             status: 'pending',
             team1_from_match: null,
             team2_from_match: null
@@ -381,58 +370,33 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
 
               <Separator />
 
-              {/* Tournament Gameweeks */}
+              {/* Match Gameweeks */}
               <div>
                 <Label className="flex items-center gap-2 mb-3">
                   <Calendar className="h-4 w-4" />
-                  Tournament Gameweeks * (used for overall scoring)
+                  Match Gameweeks * (gameweeks used to determine match winners)
                 </Label>
                 <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-2">
                   {availableGameweeks.map(gw => (
                     <Button
                       key={gw}
-                      variant={formData.gameweeks.includes(gw) ? "default" : "outline"}
+                      variant={formData.matchGameweeks.includes(gw) ? "default" : "outline"}
                       size="sm"
-                      onClick={() => handleGameweekToggle(gw)}
+                      onClick={() => handleMatchGameweekToggle(gw)}
                       type="button"
                     >
                       {gw}
                     </Button>
                   ))}
                 </div>
-                {formData.gameweeks.length > 0 && (
+                {formData.matchGameweeks.length > 0 && (
                   <p className="text-sm text-muted-foreground mt-2">
-                    Selected: {formData.gameweeks.join(', ')}
+                    Selected: {formData.matchGameweeks.join(', ')}
                   </p>
                 )}
-              </div>
-
-              <Separator />
-
-              {/* Knockout Gameweeks */}
-              <div>
-                <Label className="flex items-center gap-2 mb-3">
-                  <Trophy className="h-4 w-4" />
-                  Knockout Round Gameweeks * (specific gameweeks for matches)
-                </Label>
-                <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-2">
-                  {availableGameweeks.map(gw => (
-                    <Button
-                      key={gw}
-                      variant={formData.knockoutGameweeks.includes(gw) ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleKnockoutGameweekToggle(gw)}
-                      type="button"
-                    >
-                      {gw}
-                    </Button>
-                  ))}
-                </div>
-                {formData.knockoutGameweeks.length > 0 && (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Selected: {formData.knockoutGameweeks.join(', ')}
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  💡 Tip: Select multiple gameweeks to make matches more decisive (e.g., GW 10, 11, 12 for a 3-gameweek tournament)
+                </p>
               </div>
             </>
           )}
