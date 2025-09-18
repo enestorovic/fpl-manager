@@ -102,7 +102,7 @@ export default function Home() {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
         <div className="flex items-center justify-between p-4">
-          <h1 className="text-xl font-bold">FPL Mini League</h1>
+          <h1 className="text-xl font-bold">LA JUNGLA LV</h1>
           <Button variant="ghost" size="icon" onClick={() => setShowAdmin(true)}>
             <Settings className="h-5 w-5" />
           </Button>

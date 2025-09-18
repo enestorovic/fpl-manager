@@ -420,10 +420,28 @@ export class AutomatedSyncService {
     }
   }
 
-  // Helper: Update teams data
+  // Helper: Update teams data - Replace all teams with current API teams
   private async upsertTeams(teamsData: Omit<Team, 'created_at' | 'updated_at'>[]): Promise<number> {
     if (teamsData.length === 0) return 0
 
+    console.log(`[AutoSync] Replacing all teams with ${teamsData.length} current API teams`)
+
+    // First, get current API team IDs
+    const apiTeamIds = teamsData.map(team => team.id)
+
+    // Delete teams that are no longer in the API (like "ANTI ECDA FC")
+    const { error: deleteError } = await supabase
+      .from('teams')
+      .delete()
+      .not('id', 'in', `(${apiTeamIds.join(',')})`)
+
+    if (deleteError) {
+      console.warn('Warning: Failed to clean up old teams:', deleteError.message)
+    } else {
+      console.log('[AutoSync] Cleaned up teams not in current API')
+    }
+
+    // Now insert/update current API teams
     const teamsWithTimestamps = teamsData.map(team => ({
       ...team,
       updated_at: new Date().toISOString()
@@ -437,6 +455,7 @@ export class AutomatedSyncService {
       throw new Error(`Failed to update teams: ${error.message}`)
     }
 
+    console.log(`[AutoSync] Successfully synced ${teamsData.length} teams from API`)
     return teamsData.length
   }
 

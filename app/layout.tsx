@@ -6,8 +6,8 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "FPL Mini League Manager",
-  description: "Manage your Fantasy Premier League mini-league with ease",
+  title: "LA JUNGLA LV",
+  description: "La Jungla LV - Premier League Fantasy Football League",
     generator: 'v0.dev'
 }
 
