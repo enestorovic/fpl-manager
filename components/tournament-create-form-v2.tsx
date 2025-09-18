@@ -439,12 +439,10 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
                           <div className="mb-2">
                             <Label className="text-sm text-muted-foreground">Team 1</Label>
                             <Select
-                              value={formData.bracketAssignments[`${match.id}_team1`]?.toString() || ""}
+                              value={formData.bracketAssignments[`${match.id}_team1`]?.toString() || undefined}
                               onValueChange={(value) => {
                                 if (value) {
                                   assignTeamToPosition(`${match.id}_team1`, parseInt(value))
-                                } else {
-                                  removeTeamFromPosition(`${match.id}_team1`)
                                 }
                               }}
                             >
@@ -452,7 +450,6 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
                                 <SelectValue placeholder="Select team..." />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">No team selected</SelectItem>
                                 {[...getAvailableTeams(),
                                   ...(formData.bracketAssignments[`${match.id}_team1`]
                                     ? [getTeamById(formData.bracketAssignments[`${match.id}_team1`])]
@@ -464,6 +461,17 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
                                 ))}
                               </SelectContent>
                             </Select>
+                            {formData.bracketAssignments[`${match.id}_team1`] && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeTeamFromPosition(`${match.id}_team1`)}
+                                className="mt-1 text-xs"
+                              >
+                                Clear
+                              </Button>
+                            )}
                           </div>
 
                           <div className="text-center text-sm text-muted-foreground my-2">vs</div>
@@ -472,12 +480,10 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
                           <div>
                             <Label className="text-sm text-muted-foreground">Team 2</Label>
                             <Select
-                              value={formData.bracketAssignments[`${match.id}_team2`]?.toString() || ""}
+                              value={formData.bracketAssignments[`${match.id}_team2`]?.toString() || undefined}
                               onValueChange={(value) => {
                                 if (value) {
                                   assignTeamToPosition(`${match.id}_team2`, parseInt(value))
-                                } else {
-                                  removeTeamFromPosition(`${match.id}_team2`)
                                 }
                               }}
                             >
@@ -485,7 +491,6 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
                                 <SelectValue placeholder="Select team..." />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">No team selected</SelectItem>
                                 {[...getAvailableTeams(),
                                   ...(formData.bracketAssignments[`${match.id}_team2`]
                                     ? [getTeamById(formData.bracketAssignments[`${match.id}_team2`])]
@@ -497,6 +502,17 @@ export function TournamentCreateForm({ onCancel, onSuccess }: TournamentCreateFo
                                 ))}
                               </SelectContent>
                             </Select>
+                            {formData.bracketAssignments[`${match.id}_team2`] && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeTeamFromPosition(`${match.id}_team2`)}
+                                className="mt-1 text-xs"
+                              >
+                                Clear
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))}
