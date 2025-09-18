@@ -62,6 +62,17 @@ const config: Config = {
   				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
   				border: 'hsl(var(--sidebar-border))',
   				ring: 'hsl(var(--sidebar-ring))'
+  			},
+  			// Jungla retro colors - dark pink theme
+  			jungla: {
+  				'retro-pink': '#c97bb8',
+  				'retro-pink-dark': '#a85a98',
+  				'retro-pink-light': '#d99bc8',
+  				'dark-purple': '#4a2c4a',
+  				'deep-purple': '#2a1a2a',
+  				'charcoal': '#1a1a1a',
+  				'soft-green': '#7fb069',
+  				'forest-accent': '#3a5249'
   			}
   		},
   		borderRadius: {

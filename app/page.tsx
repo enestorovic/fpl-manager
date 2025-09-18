@@ -9,6 +9,7 @@ import { AutomatedAdminPanel } from "@/components/automated-admin-panel"
 import { PublicTournamentList } from "@/components/public-tournament-list"
 import { PublicTournamentViewer } from "@/components/public-tournament-viewer"
 import { BasesViewer } from "@/components/bases-viewer"
+import { Logo } from "@/components/logo"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Settings } from "lucide-react"
@@ -116,7 +117,7 @@ export default function Home() {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
         <div className="flex items-center justify-between p-4">
-          <h1 className="text-xl font-bold">LA JUNGLA LV</h1>
+          <Logo size="sm" />
           <Button variant="ghost" size="icon" onClick={() => setShowAdmin(true)}>
             <Settings className="h-5 w-5" />
           </Button>
