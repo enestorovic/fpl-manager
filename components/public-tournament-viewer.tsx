@@ -216,7 +216,7 @@ export function PublicTournamentViewer({ tournamentId, onBack }: PublicTournamen
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">JF: {tournament.gameweeks.join(', ')}</span>
+              <span className="text-sm">GW: {tournament.gameweeks.join(', ')}</span>
             </div>
             <div className="flex items-center gap-2">
               <Target className="h-4 w-4 text-muted-foreground" />
@@ -249,7 +249,7 @@ export function PublicTournamentViewer({ tournamentId, onBack }: PublicTournamen
                             Partido {match.match_order + 1}
                           </span>
                           <Badge variant="outline" className="text-xs">
-                            JF {match.gameweeks.join(', ')}
+                            GW {match.gameweeks.join(', ')}
                           </Badge>
                         </div>
 
