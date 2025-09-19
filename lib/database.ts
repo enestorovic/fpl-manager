@@ -323,3 +323,79 @@ export async function getTeamCaptainStats(teamId: number) {
     captainConsistency: null
   }
 }
+
+// Enhanced chip tracking with proper categorization
+export interface ChipUsage {
+  WC1: { used: boolean; gameweek?: number } // Wildcard 1 (GW 1-19)
+  WC2: { used: boolean; gameweek?: number } // Wildcard 2 (GW 20+)
+  FH1: { used: boolean; gameweek?: number } // Free Hit 1 (GW 1-19)
+  FH2: { used: boolean; gameweek?: number } // Free Hit 2 (GW 20+)
+  BB1: { used: boolean; gameweek?: number } // Bench Boost 1 (GW 1-19)
+  BB2: { used: boolean; gameweek?: number } // Bench Boost 2 (GW 20+)
+  TC1: { used: boolean; gameweek?: number } // Triple Captain 1 (GW 1-19)
+  TC2: { used: boolean; gameweek?: number } // Triple Captain 2 (GW 20+)
+}
+
+export async function getTeamChipUsage(teamId: number): Promise<ChipUsage> {
+  // Get chip data from team_summaries where chip_used is not null
+  const { data: summariesWithChips, error } = await supabase
+    .from("team_summaries")
+    .select("event_number, chip_used")
+    .eq("team_id", teamId)
+    .not("chip_used", "is", null)
+    .order("event_number", { ascending: true })
+
+  if (error) {
+    console.error("Database error:", error)
+    throw error
+  }
+
+  // Initialize chip usage tracker
+  const chipUsage: ChipUsage = {
+    WC1: { used: false },
+    WC2: { used: false },
+    FH1: { used: false },
+    FH2: { used: false },
+    BB1: { used: false },
+    BB2: { used: false },
+    TC1: { used: false },
+    TC2: { used: false }
+  }
+
+  // Process each chip from team summaries
+  summariesWithChips.forEach(summary => {
+    const gameweek = summary.event_number
+    const chipType = summary.chip_used?.toLowerCase()
+
+    if (!chipType) return
+
+    // Categorize chips based on gameweek and type
+    if (chipType === 'wildcard' || chipType === 'wc') {
+      if (gameweek <= 19) {
+        chipUsage.WC1 = { used: true, gameweek }
+      } else {
+        chipUsage.WC2 = { used: true, gameweek }
+      }
+    } else if (chipType === 'freehit' || chipType === 'fh') {
+      if (gameweek <= 19) {
+        chipUsage.FH1 = { used: true, gameweek }
+      } else {
+        chipUsage.FH2 = { used: true, gameweek }
+      }
+    } else if (chipType === 'bboost' || chipType === 'bb') {
+      if (gameweek <= 19) {
+        chipUsage.BB1 = { used: true, gameweek }
+      } else {
+        chipUsage.BB2 = { used: true, gameweek }
+      }
+    } else if (chipType === 'tc' || chipType === 'triplecaptain') {
+      if (gameweek <= 19) {
+        chipUsage.TC1 = { used: true, gameweek }
+      } else {
+        chipUsage.TC2 = { used: true, gameweek }
+      }
+    }
+  })
+
+  return chipUsage
+}

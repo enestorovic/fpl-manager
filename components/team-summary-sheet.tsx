@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { TrendingUp, Users, DollarSign, Zap, Trophy, Target, AlertCircle } from "lucide-react"
-import { getTeamSummary, getTeamChips, getCurrentGameweek, getTeamSeasonStats, getTeamCaptainStats } from "@/lib/database"
+import { getTeamSummary, getTeamChips, getCurrentGameweek, getTeamSeasonStats, getTeamCaptainStats, getTeamChipUsage, type ChipUsage } from "@/lib/database"
 import type { Team, Chip, TeamSummary as TeamSummaryType } from "@/lib/supabase"
 
 interface TeamSummarySheetProps {
@@ -18,6 +18,7 @@ interface TeamSummarySheetProps {
 export function TeamSummarySheet({ team, open, onOpenChange }: TeamSummarySheetProps) {
   const [summary, setSummary] = useState<TeamSummaryType | null>(null)
   const [chips, setChips] = useState<Chip[]>([])
+  const [chipUsage, setChipUsage] = useState<ChipUsage | null>(null)
   const [seasonStats, setSeasonStats] = useState<any>(null)
   const [currentGameweek, setCurrentGameweek] = useState<number>(38)
   const [loading, setLoading] = useState(false)
@@ -27,6 +28,7 @@ export function TeamSummarySheet({ team, open, onOpenChange }: TeamSummarySheetP
     if (!team || !open) {
       setSummary(null)
       setChips([])
+      setChipUsage(null)
       setError(null)
       return
     }
@@ -35,15 +37,17 @@ export function TeamSummarySheet({ team, open, onOpenChange }: TeamSummarySheetP
       setLoading(true)
       setError(null)
       try {
-        const [currentGW, summaryData, chipsData, seasonStatsData] = await Promise.all([
+        const [currentGW, summaryData, chipsData, chipUsageData, seasonStatsData] = await Promise.all([
           getCurrentGameweek().catch(() => 38),
           getTeamSummary(team.id).catch(() => null),
           getTeamChips(team.id).catch(() => []),
+          getTeamChipUsage(team.id).catch(() => null),
           getTeamSeasonStats(team.id).catch(() => null),
         ])
         setCurrentGameweek(currentGW)
         setSummary(summaryData)
         setChips(chipsData)
+        setChipUsage(chipUsageData)
         setSeasonStats(seasonStatsData)
       } catch (error) {
         console.error("Error fetching team data:", error)
@@ -226,26 +230,128 @@ export function TeamSummarySheet({ team, open, onOpenChange }: TeamSummarySheetP
 
                   <Separator />
 
-                  {/* Chips Used - Temporarily Hidden */}
-                  {false && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-base font-medium">
-                        <Zap className="h-5 w-5" />
-                        Chips Used This Season
-                      </div>
-                      {chips.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {chips.map((chip) => (
-                            <Badge key={chip.id} variant="outline" className="text-sm px-3 py-1">
-                              {chip.chip_type.toUpperCase()} (GW{chip.event_number})
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No chips data available</p>
-                      )}
+                  {/* Chips Used - Enhanced Display */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-base font-medium">
+                      <Zap className="h-5 w-5" />
+                      Chips Used This Season
                     </div>
-                  )}
+                    {chipUsage ? (
+                      <div className="space-y-4">
+                        {/* First Half Season (GW 1-19) */}
+                        <div>
+                          <div className="text-sm font-medium text-muted-foreground mb-2">First Half (GW 1-19)</div>
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="text-center p-3 bg-muted/30 rounded-lg">
+                              <div className="text-xs text-muted-foreground mb-1">WC1</div>
+                              {chipUsage.WC1.used ? (
+                                <Badge variant="default" className="text-xs">
+                                  GW{chipUsage.WC1.gameweek}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs opacity-50">
+                                  Unused
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-center p-3 bg-muted/30 rounded-lg">
+                              <div className="text-xs text-muted-foreground mb-1">FH1</div>
+                              {chipUsage.FH1.used ? (
+                                <Badge variant="default" className="text-xs">
+                                  GW{chipUsage.FH1.gameweek}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs opacity-50">
+                                  Unused
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-center p-3 bg-muted/30 rounded-lg">
+                              <div className="text-xs text-muted-foreground mb-1">BB1</div>
+                              {chipUsage.BB1.used ? (
+                                <Badge variant="default" className="text-xs">
+                                  GW{chipUsage.BB1.gameweek}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs opacity-50">
+                                  Unused
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-center p-3 bg-muted/30 rounded-lg">
+                              <div className="text-xs text-muted-foreground mb-1">TC1</div>
+                              {chipUsage.TC1.used ? (
+                                <Badge variant="default" className="text-xs">
+                                  GW{chipUsage.TC1.gameweek}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs opacity-50">
+                                  Unused
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Second Half Season (GW 20+) */}
+                        <div>
+                          <div className="text-sm font-medium text-muted-foreground mb-2">Second Half (GW 20+)</div>
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="text-center p-3 bg-muted/30 rounded-lg">
+                              <div className="text-xs text-muted-foreground mb-1">WC2</div>
+                              {chipUsage.WC2.used ? (
+                                <Badge variant="default" className="text-xs">
+                                  GW{chipUsage.WC2.gameweek}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs opacity-50">
+                                  Unused
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-center p-3 bg-muted/30 rounded-lg">
+                              <div className="text-xs text-muted-foreground mb-1">FH2</div>
+                              {chipUsage.FH2.used ? (
+                                <Badge variant="default" className="text-xs">
+                                  GW{chipUsage.FH2.gameweek}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs opacity-50">
+                                  Unused
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-center p-3 bg-muted/30 rounded-lg">
+                              <div className="text-xs text-muted-foreground mb-1">BB2</div>
+                              {chipUsage.BB2.used ? (
+                                <Badge variant="default" className="text-xs">
+                                  GW{chipUsage.BB2.gameweek}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs opacity-50">
+                                  Unused
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-center p-3 bg-muted/30 rounded-lg">
+                              <div className="text-xs text-muted-foreground mb-1">TC2</div>
+                              {chipUsage.TC2.used ? (
+                                <Badge variant="default" className="text-xs">
+                                  GW{chipUsage.TC2.gameweek}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs opacity-50">
+                                  Unused
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No chips data available</p>
+                    )}
+                  </div>
 
                   {/* Current Chip */}
                   {summary?.chip_used && (
