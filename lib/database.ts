@@ -399,3 +399,123 @@ export async function getTeamChipUsage(teamId: number): Promise<ChipUsage> {
 
   return chipUsage
 }
+
+// Season statistics interface
+export interface TeamSeasonStats {
+  teamId: number
+  teamName: string
+  managerName: string
+  totalPoints: number
+  totalTransferHits: number
+  totalCaptainPoints: number
+  averagePoints: number
+  bestGameweek: { points: number; gameweek: number }
+  worstGameweek: { points: number; gameweek: number }
+  gameweeksPlayed: number
+  chipsUsed: number
+  currentRank: number
+  highestRank: number
+  lowestRank: number
+}
+
+// Get comprehensive season statistics for all teams
+export async function getAllTeamsSeasonStats(): Promise<TeamSeasonStats[]> {
+  try {
+    // Get all teams
+    const { data: teams, error: teamsError } = await supabase
+      .from('teams')
+      .select('*')
+      .order('rank', { ascending: true })
+
+    if (teamsError) throw teamsError
+
+    // Get all team summaries
+    const { data: summaries, error: summariesError } = await supabase
+      .from('team_summaries')
+      .select('*')
+      .order('team_id, event_number')
+
+    if (summariesError) throw summariesError
+
+    // Group summaries by team
+    const summariesByTeam = summaries.reduce((acc, summary) => {
+      if (!acc[summary.team_id]) {
+        acc[summary.team_id] = []
+      }
+      acc[summary.team_id].push(summary)
+      return acc
+    }, {} as Record<number, any[]>)
+
+    // Calculate stats for each team
+    const teamStats: TeamSeasonStats[] = teams.map(team => {
+      const teamSummaries = summariesByTeam[team.id] || []
+
+      if (teamSummaries.length === 0) {
+        return {
+          teamId: team.id,
+          teamName: team.entry_name,
+          managerName: team.player_name,
+          totalPoints: team.total,
+          totalTransferHits: 0,
+          totalCaptainPoints: 0,
+          averagePoints: 0,
+          bestGameweek: { points: 0, gameweek: 0 },
+          worstGameweek: { points: 0, gameweek: 0 },
+          gameweeksPlayed: 0,
+          chipsUsed: 0,
+          currentRank: team.rank,
+          highestRank: team.rank,
+          lowestRank: team.rank
+        }
+      }
+
+      // Calculate total transfer hits
+      const totalTransferHits = teamSummaries.reduce((sum, s) => sum + (s.transfers_cost || 0), 0)
+
+      // Calculate total captain points (placeholder - would need captain data)
+      const totalCaptainPoints = 0 // TODO: implement when captain data is available
+
+      // Find best and worst gameweeks
+      const bestGW = teamSummaries.reduce((best, current) =>
+        current.points > best.points ? current : best
+      )
+      const worstGW = teamSummaries.reduce((worst, current) =>
+        current.points < worst.points ? current : worst
+      )
+
+      // Calculate average points
+      const totalGameweekPoints = teamSummaries.reduce((sum, s) => sum + s.points, 0)
+      const averagePoints = Math.round(totalGameweekPoints / teamSummaries.length)
+
+      // Count chips used
+      const chipsUsed = teamSummaries.filter(s => s.chip_used).length
+
+      // Calculate rank statistics (placeholder - would need historical rank data)
+      const highestRank = team.rank // TODO: implement when historical rank data is available
+      const lowestRank = team.rank // TODO: implement when historical rank data is available
+
+      return {
+        teamId: team.id,
+        teamName: team.entry_name,
+        managerName: team.player_name,
+        totalPoints: team.total,
+        totalTransferHits,
+        totalCaptainPoints,
+        averagePoints,
+        bestGameweek: { points: bestGW.points, gameweek: bestGW.event_number },
+        worstGameweek: { points: worstGW.points, gameweek: worstGW.event_number },
+        gameweeksPlayed: teamSummaries.length,
+        chipsUsed,
+        currentRank: team.rank,
+        highestRank,
+        lowestRank
+      }
+    })
+
+    return teamStats
+
+  } catch (error) {
+    console.error('Error calculating season stats:', error)
+    throw error
+  }
+}

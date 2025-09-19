@@ -1,11 +1,11 @@
 "use client"
 
-import { Trophy, Award, FileText } from "lucide-react"
+import { Trophy, Award, FileText, BarChart3 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface BottomNavProps {
-  activeTab: "league" | "cup" | "bases"
-  onTabChange: (tab: "league" | "cup" | "bases") => void
+  activeTab: "league" | "cup" | "bases" | "stats"
+  onTabChange: (tab: "league" | "cup" | "bases" | "stats") => void
 }
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
@@ -41,6 +41,16 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         >
           <FileText className="h-5 w-5 mb-1" />
           Bases
+        </button>
+        <button
+          onClick={() => onTabChange("stats")}
+          className={cn(
+            "flex-1 flex flex-col items-center justify-center py-3 px-4 text-sm font-medium transition-colors",
+            activeTab === "stats" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <BarChart3 className="h-5 w-5 mb-1" />
+          Stats
         </button>
       </div>
     </div>

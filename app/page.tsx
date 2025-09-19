@@ -9,6 +9,7 @@ import { AutomatedAdminPanel } from "@/components/automated-admin-panel"
 import { PublicTournamentList } from "@/components/public-tournament-list"
 import { PublicTournamentViewer } from "@/components/public-tournament-viewer"
 import { BasesViewer } from "@/components/bases-viewer"
+import { StatsTable } from "@/components/stats-table"
 import { Logo } from "@/components/logo"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -17,7 +18,7 @@ import { getTeams, getTeamsByGameweek, getAvailableGameweeks, getCurrentGameweek
 import type { Team } from "@/lib/supabase"
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"league" | "cup" | "bases">("league")
+  const [activeTab, setActiveTab] = useState<"league" | "cup" | "bases" | "stats">("league")
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [showTeamSheet, setShowTeamSheet] = useState(false)
   const [teams, setTeams] = useState<Team[]>([])
@@ -183,6 +184,12 @@ export default function Home() {
         {activeTab === "bases" && (
           <div className="max-w-4xl mx-auto">
             <BasesViewer />
+          </div>
+        )}
+
+        {activeTab === "stats" && (
+          <div className="max-w-6xl mx-auto">
+            <StatsTable />
           </div>
         )}
       </main>
