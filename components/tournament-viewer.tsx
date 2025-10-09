@@ -34,6 +34,7 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
   const [error, setError] = useState<string | null>(null)
   const [calculating, setCalculating] = useState(false)
   const [hardRefreshing, setHardRefreshing] = useState(false)
+  const [selectedRound, setSelectedRound] = useState<number | null>(null)
 
   useEffect(() => {
     fetchTournamentData()
@@ -230,6 +231,7 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
 
           let team1Score = 0
           let team2Score = 0
+          let hasValidData = false
 
           // Sum points across all gameweeks for this match
           for (const gw of gameweeks) {
@@ -249,57 +251,73 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
               .eq('event_number', gw)
               .single()
 
-            // Calculate net scores (points - transfer costs)
-            const team1NetScore = (team1Summary?.points || 0) - (team1Summary?.transfers_cost || 0)
-            const team2NetScore = (team2Summary?.points || 0) - (team2Summary?.transfers_cost || 0)
+            // Check if we have valid data (either team has actual data, not just missing records)
+            const team1HasData = team1Summary && !team1Error
+            const team2HasData = team2Summary && !team2Error
 
-            console.log(`GW ${gw} results:`, {
-              team1Points: team1Summary?.points || 0,
-              team1TransferCost: team1Summary?.transfers_cost || 0,
-              team1NetScore,
-              team2Points: team2Summary?.points || 0,
-              team2TransferCost: team2Summary?.transfers_cost || 0,
-              team2NetScore,
-              team1Error: team1Error?.message,
-              team2Error: team2Error?.message
-            })
+            if (team1HasData && team2HasData) {
+              hasValidData = true
 
-            team1Score += team1NetScore
-            team2Score += team2NetScore
+              // Calculate net scores (points - transfer costs)
+              const team1NetScore = (team1Summary.points || 0) - (team1Summary.transfers_cost || 0)
+              const team2NetScore = (team2Summary.points || 0) - (team2Summary.transfers_cost || 0)
+
+              console.log(`GW ${gw} results (valid data):`, {
+                team1Points: team1Summary.points || 0,
+                team1TransferCost: team1Summary.transfers_cost || 0,
+                team1NetScore,
+                team2Points: team2Summary.points || 0,
+                team2TransferCost: team2Summary.transfers_cost || 0,
+                team2NetScore
+              })
+
+              team1Score += team1NetScore
+              team2Score += team2NetScore
+            } else {
+              console.log(`GW ${gw} results (no data available):`, {
+                team1Error: team1Error?.message || 'No data',
+                team2Error: team2Error?.message || 'No data'
+              })
+            }
           }
 
           console.log(`Final scores for match ${match.id}:`, {
             team1Score,
             team2Score,
-            hasData: team1Score > 0 || team2Score > 0
+            hasValidData,
+            gameweeks
           })
 
-          // Update match even if scores are zero (to mark it as processed)
-          // Determine winner
-          const winnerId = team1Score > team2Score ? match.team1_id :
-                          team2Score > team1Score ? match.team2_id : null
+          // Only update match if we have valid data for the gameweeks
+          if (hasValidData) {
+            // Determine winner
+            const winnerId = team1Score > team2Score ? match.team1_id :
+                            team2Score > team1Score ? match.team2_id : null
 
-          console.log(`Updating match ${match.id} with winner ${winnerId}`)
+            console.log(`Updating match ${match.id} with winner ${winnerId} (valid data available)`)
 
-          // Update match with scores
-          const { error: updateError } = await supabase
-            .from('tournament_matches')
-            .update({
-              team1_score: team1Score,
-              team2_score: team2Score,
-              winner_id: winnerId,
-              status: 'completed',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', match.id)
+            // Update match with scores
+            const { error: updateError } = await supabase
+              .from('tournament_matches')
+              .update({
+                team1_score: team1Score,
+                team2_score: team2Score,
+                winner_id: winnerId,
+                status: 'completed',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', match.id)
 
-          if (updateError) {
-            console.error('Error updating match:', updateError)
-            throw updateError
+            if (updateError) {
+              console.error('Error updating match:', updateError)
+              throw updateError
+            }
+
+            console.log(`Successfully updated match ${match.id}`)
+            matchesUpdated++
+          } else {
+            console.log(`Skipping match ${match.id} - no gameweek data available yet`)
           }
-
-          console.log(`Successfully updated match ${match.id}`)
-          matchesUpdated++
         } else {
           console.log(`Skipping match ${match.id}: missing teams or already completed`)
         }
@@ -648,26 +666,101 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
       {/* Tournament Bracket */}
       <Card>
         <CardHeader>
-          <CardTitle>Tournament Bracket</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Tournament Bracket</CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Progress:</span>
+              <div className="flex items-center gap-1">
+                {Object.keys(matchesByRound).map((round) => {
+                  const roundNum = parseInt(round)
+                  const roundMatches = matchesByRound[roundNum]
+                  const completedMatches = roundMatches.filter(m => m.status === 'completed').length
+                  const totalMatches = roundMatches.length
+                  const isCompleted = completedMatches === totalMatches
+
+                  return (
+                    <div
+                      key={round}
+                      className={`w-3 h-3 rounded-full ${
+                        isCompleted
+                          ? 'bg-green-500'
+                          : completedMatches > 0
+                            ? 'bg-yellow-500'
+                            : 'bg-gray-300'
+                      }`}
+                      title={`${roundMatches[0]?.round_name || `Round ${round}`}: ${completedMatches}/${totalMatches} completed`}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
+          {/* Phase Navigation */}
+          <div className="mb-6">
+            <div className="flex flex-wrap gap-2 mb-4">
+              <Button
+                variant={selectedRound === null ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedRound(null)}
+                className="text-xs"
+              >
+                All Phases
+              </Button>
+              {Object.entries(matchesByRound).map(([round, matches]) => {
+                const roundNum = parseInt(round)
+                const completedMatches = matches.filter(m => m.status === 'completed').length
+                const totalMatches = matches.length
+
+                return (
+                  <Button
+                    key={round}
+                    variant={selectedRound === roundNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedRound(roundNum)}
+                    className="text-xs flex items-center gap-2"
+                  >
+                    {matches[0]?.round_name || `Round ${round}`}
+                    <Badge variant="secondary" className="text-xs px-1">
+                      {completedMatches}/{totalMatches}
+                    </Badge>
+                  </Button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Bracket Display */}
           <div className="space-y-6">
-            {Object.entries(matchesByRound).map(([round, matches]) => (
+            {Object.entries(matchesByRound)
+              .filter(([round]) => selectedRound === null || parseInt(round) === selectedRound)
+              .map(([round, matches]) => (
               <div key={round}>
-                <h3 className="text-lg font-medium mb-4">
-                  {matches[0]?.round_name || `Round ${round}`}
-                </h3>
-                <div className="grid gap-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <h3 className="text-lg font-medium">
+                    {matches[0]?.round_name || `Round ${round}`}
+                  </h3>
+                  <Badge variant="outline" className="text-xs">
+                    {matches.filter(m => m.status === 'completed').length} of {matches.length} completed
+                  </Badge>
+                </div>
+
+                <div className={`grid gap-4 ${
+                  matches.length <= 2 ? 'grid-cols-1' :
+                  matches.length <= 4 ? 'grid-cols-1 md:grid-cols-2' :
+                  'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+                }`}>
                   {matches.map((match) => {
                     const result = getMatchResult(match)
 
                     return (
-                      <div key={match.id} className="border rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm text-muted-foreground">
+                      <div key={match.id} className="border rounded-lg p-4 bg-gradient-to-br from-white to-pink-50/30">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-pink-700">
                             Match {match.match_order + 1}
                           </span>
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="outline" className="text-xs border-pink-200 text-pink-700">
                             GW {match.gameweeks.join(', ')}
                           </Badge>
                         </div>
@@ -675,42 +768,58 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
                         {result ? (
                           <div className="space-y-2">
                             {/* Team 1 */}
-                            <div className={`flex items-center justify-between p-2 rounded ${
-                              result.team1.isWinner ? 'bg-green-50 border border-green-200' : 'bg-muted/50'
+                            <div className={`flex items-center justify-between p-3 rounded-lg transition-all ${
+                              result.team1.isWinner
+                                ? 'bg-gradient-to-r from-green-100 to-emerald-100 border border-green-300 shadow-sm'
+                                : 'bg-gray-50 border border-gray-200'
                             }`}>
                               <div className="flex items-center gap-2">
-                                {result.team1.isWinner && <Crown className="h-4 w-4 text-yellow-500" />}
-                                <span className="font-medium">{result.team1.entry_name}</span>
-                                <span className="text-xs text-muted-foreground">#{result.team1.rank}</span>
+                                {result.team1.isWinner && <Crown className="h-4 w-4 text-yellow-600" />}
+                                <div>
+                                  <span className="font-medium text-sm">{result.team1.entry_name}</span>
+                                  <div className="text-xs text-muted-foreground">#{result.team1.rank}</div>
+                                </div>
                               </div>
-                              <div className="font-mono font-bold">
+                              <div className={`font-mono font-bold text-lg ${
+                                result.team1.isWinner ? 'text-green-700' : 'text-gray-600'
+                              }`}>
                                 {match.status === 'completed' ? result.team1.score : '—'}
                               </div>
                             </div>
 
+                            {/* VS */}
+                            <div className="text-center text-xs text-pink-600 font-medium">VS</div>
+
                             {/* Team 2 */}
-                            <div className={`flex items-center justify-between p-2 rounded ${
-                              result.team2.isWinner ? 'bg-green-50 border border-green-200' : 'bg-muted/50'
+                            <div className={`flex items-center justify-between p-3 rounded-lg transition-all ${
+                              result.team2.isWinner
+                                ? 'bg-gradient-to-r from-green-100 to-emerald-100 border border-green-300 shadow-sm'
+                                : 'bg-gray-50 border border-gray-200'
                             }`}>
                               <div className="flex items-center gap-2">
-                                {result.team2.isWinner && <Crown className="h-4 w-4 text-yellow-500" />}
-                                <span className="font-medium">{result.team2.entry_name}</span>
-                                <span className="text-xs text-muted-foreground">#{result.team2.rank}</span>
+                                {result.team2.isWinner && <Crown className="h-4 w-4 text-yellow-600" />}
+                                <div>
+                                  <span className="font-medium text-sm">{result.team2.entry_name}</span>
+                                  <div className="text-xs text-muted-foreground">#{result.team2.rank}</div>
+                                </div>
                               </div>
-                              <div className="font-mono font-bold">
+                              <div className={`font-mono font-bold text-lg ${
+                                result.team2.isWinner ? 'text-green-700' : 'text-gray-600'
+                              }`}>
                                 {match.status === 'completed' ? result.team2.score : '—'}
                               </div>
                             </div>
 
                             {result.isDraw && (
-                              <div className="text-center text-sm text-orange-600 font-medium">
+                              <div className="text-center text-sm text-orange-600 font-medium mt-2 p-2 bg-orange-50 rounded">
                                 Draw
                               </div>
                             )}
                           </div>
                         ) : (
-                          <div className="text-center text-muted-foreground py-4">
-                            Teams to be determined
+                          <div className="text-center text-muted-foreground py-8 bg-gray-50 rounded-lg">
+                            <Users className="h-6 w-6 mx-auto mb-2 text-gray-400" />
+                            <p className="text-sm">Teams to be determined</p>
                           </div>
                         )}
                       </div>
