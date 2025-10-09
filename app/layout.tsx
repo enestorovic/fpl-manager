@@ -36,8 +36,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="icon" href="/LOGOjungla.png" />
-        <link rel="apple-touch-icon" href="/LOGOjungla.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+        <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
+        <link rel="shortcut icon" href="/icon-192.png" />
         <script
           dangerouslySetInnerHTML={{
             __html: `

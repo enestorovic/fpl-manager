@@ -86,7 +86,7 @@ export function PWAInstallPrompt() {
               <p className="font-medium text-pink-800">¡Instala La Jungla LV!</p>
               <p className="text-sm text-pink-700/80">
                 {isIOS
-                  ? 'Toca el botón de compartir y selecciona "Añadir a pantalla de inicio"'
+                  ? 'Toca el botón de compartir (Share) y selecciona "Añadir a pantalla de inicio" (Add to Home Screen)'
                   : 'Accede más rápido desde tu pantalla de inicio'
                 }
               </p>
