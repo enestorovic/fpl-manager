@@ -12,7 +12,8 @@ import {
   Users,
   ArrowLeft,
   Crown,
-  Target
+  Target,
+  RefreshCw
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { Tournament, TournamentMatch, TournamentParticipant, Team } from "@/lib/supabase"
@@ -31,6 +32,7 @@ export function PublicTournamentViewer({ tournamentId, onBack }: PublicTournamen
   const [tournament, setTournament] = useState<TournamentWithData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     fetchTournamentData()
@@ -87,6 +89,19 @@ export function PublicTournamentViewer({ tournamentId, onBack }: PublicTournamen
       setError('Error al cargar los datos del torneo')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    setError(null)
+    try {
+      await fetchTournamentData()
+    } catch (error) {
+      console.error('Error refreshing tournament data:', error)
+      setError('Error al actualizar los datos del torneo')
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -179,9 +194,29 @@ export function PublicTournamentViewer({ tournamentId, onBack }: PublicTournamen
           </h1>
           <p className="text-muted-foreground">{tournament.description}</p>
         </div>
-        <Badge variant="outline" className={`${getStatusColor(tournament.status)} text-white`}>
-          {tournament.status}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            {refreshing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                Actualizando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Actualizar
+              </>
+            )}
+          </Button>
+          <Badge variant="outline" className={`${getStatusColor(tournament.status)} text-white`}>
+            {tournament.status}
+          </Badge>
+        </div>
       </div>
 
       {/* Tournament Winner (if completed) */}

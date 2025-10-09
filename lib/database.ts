@@ -2,13 +2,80 @@ import { supabase } from "./supabase"
 import type { Team, TeamSummary, Chip, LeagueMetadata } from "./supabase"
 
 export async function getTeams(sortBy: "event_total" | "total" = "event_total") {
-  const { data, error } = await supabase.from("teams").select("*").order(sortBy, { ascending: false })
+  // Get teams with corrected totals and proper rankings
+  const correctedTeams = await getTeamsWithCorrectTotals()
 
-  if (error) {
-    console.error("Database error:", error)
-    throw error
+  // Sort by the requested field
+  const sortedTeams = correctedTeams.sort((a, b) => {
+    if (sortBy === "event_total") {
+      return b.event_total - a.event_total
+    } else {
+      return b.total - a.total
+    }
+  })
+
+  // Recalculate rankings based on total points
+  return sortedTeams.map((team, index) => ({
+    ...team,
+    rank: index + 1
+  }))
+}
+
+// Helper function to get teams with corrected total calculations
+export async function getTeamsWithCorrectTotals(): Promise<Team[]> {
+  try {
+    // Get all teams
+    const { data: teams, error: teamsError } = await supabase
+      .from('teams')
+      .select('*')
+
+    if (teamsError) throw teamsError
+
+    // Get all team summaries
+    const { data: summaries, error: summariesError } = await supabase
+      .from('team_summaries')
+      .select('*')
+
+    if (summariesError) throw summariesError
+
+    // Group summaries by team
+    const summariesByTeam = summaries.reduce((acc, summary) => {
+      if (!acc[summary.team_id]) {
+        acc[summary.team_id] = []
+      }
+      acc[summary.team_id].push(summary)
+      return acc
+    }, {} as Record<number, any[]>)
+
+    // Calculate corrected totals for each team
+    const correctedTeams = teams.map(team => {
+      const teamSummaries = summariesByTeam[team.id] || []
+
+      if (teamSummaries.length === 0) {
+        // For teams without detailed data, use the original total as fallback
+        return team
+      }
+
+      // Calculate correct total (gameweek points - transfer costs)
+      const totalGameweekPoints = teamSummaries.reduce((sum, s) => sum + s.points, 0)
+      const totalTransferHits = teamSummaries.reduce((sum, s) => sum + (s.transfers_cost || 0), 0)
+      const correctTotalPoints = totalGameweekPoints - totalTransferHits
+
+      return {
+        ...team,
+        total: correctTotalPoints
+      }
+    })
+
+    return correctedTeams
+
+  } catch (error) {
+    console.error('Error calculating correct totals:', error)
+    // Fallback to original data if there's an error
+    const { data, error: fallbackError } = await supabase.from("teams").select("*")
+    if (fallbackError) throw fallbackError
+    return data as Team[]
   }
-  return data as Team[]
 }
 
 export async function getTeamSummary(teamId: number, eventNumber = 38) {
@@ -189,10 +256,10 @@ export async function getTeamsByGameweek(gameweek: number, sortBy: "event_total"
   // Calculate cumulative totals up to the specified gameweek for each team
   const teamsWithGameweekData = await Promise.all(
     teams.map(async (team) => {
-      // Get all summaries up to this gameweek for cumulative total
+      // Get all summaries up to this gameweek for cumulative total (including transfer costs)
       const { data: cumulativeSummaries, error } = await supabase
         .from("team_summaries")
-        .select("points")
+        .select("points, transfers_cost")
         .eq("team_id", team.id)
         .lte("event_number", gameweek)
 
@@ -205,14 +272,18 @@ export async function getTeamsByGameweek(gameweek: number, sortBy: "event_total"
         }
       }
 
-      const cumulativeTotal = cumulativeSummaries?.reduce((sum, summary) => sum + summary.points, 0) || 0
+      // Calculate correct cumulative total (points - transfer costs)
+      const cumulativePoints = cumulativeSummaries?.reduce((sum, summary) => sum + summary.points, 0) || 0
+      const cumulativeTransferCosts = cumulativeSummaries?.reduce((sum, summary) => sum + (summary.transfers_cost || 0), 0) || 0
+      const correctCumulativeTotal = cumulativePoints - cumulativeTransferCosts
+
       const currentGameweekSummary = summaries?.find(s => s.team_id === team.id)
       const eventTotal = currentGameweekSummary?.points || team.event_total
 
       return {
         ...team,
         event_total: eventTotal,
-        cumulative_total: cumulativeTotal
+        cumulative_total: correctCumulativeTotal
       }
     })
   )
@@ -451,6 +522,8 @@ export async function getAllTeamsSeasonStats(): Promise<TeamSeasonStats[]> {
       const teamSummaries = summariesByTeam[team.id] || []
 
       if (teamSummaries.length === 0) {
+        // For teams without detailed data, use the league standings total as fallback
+        // This may not be perfectly accurate but it's the best we have
         return {
           teamId: team.id,
           teamName: team.entry_name,
@@ -469,8 +542,10 @@ export async function getAllTeamsSeasonStats(): Promise<TeamSeasonStats[]> {
         }
       }
 
-      // Calculate total transfer hits
+      // Calculate total points correctly (gameweek points - transfer costs)
+      const totalGameweekPoints = teamSummaries.reduce((sum, s) => sum + s.points, 0)
       const totalTransferHits = teamSummaries.reduce((sum, s) => sum + (s.transfers_cost || 0), 0)
+      const correctTotalPoints = totalGameweekPoints - totalTransferHits
 
       // Calculate total captain points (placeholder - would need captain data)
       const totalCaptainPoints = 0 // TODO: implement when captain data is available
@@ -484,7 +559,6 @@ export async function getAllTeamsSeasonStats(): Promise<TeamSeasonStats[]> {
       )
 
       // Calculate average points
-      const totalGameweekPoints = teamSummaries.reduce((sum, s) => sum + s.points, 0)
       const averagePoints = Math.round(totalGameweekPoints / teamSummaries.length)
 
       // Count chips used
@@ -498,7 +572,7 @@ export async function getAllTeamsSeasonStats(): Promise<TeamSeasonStats[]> {
         teamId: team.id,
         teamName: team.entry_name,
         managerName: team.player_name,
-        totalPoints: team.total,
+        totalPoints: correctTotalPoints,
         totalTransferHits,
         totalCaptainPoints,
         averagePoints,

@@ -119,12 +119,17 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-16">
+    <div className="min-h-screen bg-gradient-to-br from-background via-pink-50/30 to-purple-50/20 pb-16">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-        <div className="flex items-center justify-between p-4">
-          <Logo size="sm" />
-          <Button variant="ghost" size="icon" onClick={() => setShowAdmin(true)}>
+      <header className="sticky top-0 z-40 bg-gradient-to-r from-pink-500/10 via-purple-500/5 to-pink-400/10 backdrop-blur-md border-b border-pink-200/50 shadow-sm">
+        <div className="flex items-center justify-between p-4 max-w-7xl mx-auto">
+          <Logo size="md" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowAdmin(true)}
+            className="hover:bg-pink-100/50 hover:text-pink-700"
+          >
             <Settings className="h-5 w-5" />
           </Button>
         </div>

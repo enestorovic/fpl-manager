@@ -33,6 +33,7 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [calculating, setCalculating] = useState(false)
+  const [hardRefreshing, setHardRefreshing] = useState(false)
 
   useEffect(() => {
     fetchTournamentData()
@@ -55,6 +56,19 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
       }, 1000) // Small delay to ensure data is loaded
 
       return () => clearTimeout(timer)
+    }
+  }, [tournament?.status, tournament?.id])
+
+  // Set up periodic refresh for active tournaments
+  useEffect(() => {
+    if (tournament && tournament.status === 'active') {
+      // Check for new gameweek data every 5 minutes
+      const interval = setInterval(() => {
+        console.log('Periodic check for new gameweek data...')
+        autoCalculateScoresIfNeeded()
+      }, 5 * 60 * 1000) // 5 minutes
+
+      return () => clearInterval(interval)
     }
   }, [tournament?.status, tournament?.id])
 
@@ -223,27 +237,35 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
 
             const { data: team1Summary, error: team1Error } = await supabase
               .from('team_summaries')
-              .select('points')
+              .select('points, transfers_cost')
               .eq('team_id', match.team1_id)
               .eq('event_number', gw)
               .single()
 
             const { data: team2Summary, error: team2Error } = await supabase
               .from('team_summaries')
-              .select('points')
+              .select('points, transfers_cost')
               .eq('team_id', match.team2_id)
               .eq('event_number', gw)
               .single()
 
+            // Calculate net scores (points - transfer costs)
+            const team1NetScore = (team1Summary?.points || 0) - (team1Summary?.transfers_cost || 0)
+            const team2NetScore = (team2Summary?.points || 0) - (team2Summary?.transfers_cost || 0)
+
             console.log(`GW ${gw} results:`, {
               team1Points: team1Summary?.points || 0,
+              team1TransferCost: team1Summary?.transfers_cost || 0,
+              team1NetScore,
               team2Points: team2Summary?.points || 0,
+              team2TransferCost: team2Summary?.transfers_cost || 0,
+              team2NetScore,
               team1Error: team1Error?.message,
               team2Error: team2Error?.message
             })
 
-            team1Score += team1Summary?.points || 0
-            team2Score += team2Summary?.points || 0
+            team1Score += team1NetScore
+            team2Score += team2NetScore
           }
 
           console.log(`Final scores for match ${match.id}:`, {
@@ -416,6 +438,67 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
     }
   }
 
+  const hardRefreshTournament = async () => {
+    if (!tournament) return
+
+    if (!confirm('This will completely reset and recalculate the entire tournament from scratch. All current match results will be cleared. Are you sure?')) {
+      return
+    }
+
+    setHardRefreshing(true)
+    setError(null)
+
+    try {
+      console.log('Starting hard refresh: resetting all matches...')
+
+      // Reset all matches in the tournament
+      const { error: resetError } = await supabase
+        .from('tournament_matches')
+        .update({
+          team1_score: null,
+          team2_score: null,
+          winner_id: null,
+          status: 'pending',
+          updated_at: new Date().toISOString()
+        })
+        .eq('tournament_id', tournamentId)
+
+      if (resetError) throw resetError
+
+      // Reset all matches except first round back to no teams
+      const { error: clearTeamsError } = await supabase
+        .from('tournament_matches')
+        .update({
+          team1_id: null,
+          team2_id: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('tournament_id', tournamentId)
+        .gt('round_order', 1)
+
+      if (clearTeamsError) throw clearTeamsError
+
+      console.log('All matches reset, refreshing tournament data...')
+
+      // Refresh tournament data
+      await fetchTournamentData()
+
+      // Wait a moment for state to update
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      console.log('Starting fresh calculation...')
+
+      // Now recalculate everything from scratch
+      await calculateMatchScores()
+
+    } catch (error) {
+      console.error('Error during hard refresh:', error)
+      setError('Failed to reset and recalculate tournament')
+    } finally {
+      setHardRefreshing(false)
+    }
+  }
+
   const getTeamById = (teamId: number | null) => {
     if (!teamId || !tournament) return null
     return tournament.participants.find(p => p.team_id === teamId)?.team
@@ -495,7 +578,46 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
       {/* Tournament Info */}
       <Card>
         <CardHeader>
-          <CardTitle>Tournament Details</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Tournament Details</CardTitle>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => calculateMatchScores()}
+                disabled={calculating || hardRefreshing}
+              >
+                {calculating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh Scores
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={hardRefreshTournament}
+                disabled={calculating || hardRefreshing}
+              >
+                {hardRefreshing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                    Resetting...
+                  </>
+                ) : (
+                  <>
+                    🔄 Hard Reset
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ArrowUpDown, TrendingUp, TrendingDown, Trophy, Target, Users, AlertCircle } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { getAllTeamsSeasonStats, type TeamSeasonStats } from "@/lib/database"
 
 type SortField = keyof TeamSeasonStats | 'bestGameweek' | 'worstGameweek'
@@ -120,11 +121,13 @@ export function StatsTable() {
   }
 
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-3">
+    <Card className="h-full bg-gradient-to-br from-white via-pink-50/20 to-purple-50/20 border-pink-200/30 shadow-lg">
+      <CardHeader className="pb-3 bg-gradient-to-r from-pink-500/5 to-purple-500/5 border-b border-pink-100/30">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Season Statistics</CardTitle>
-          <Badge variant="outline" className="text-xs">
+          <CardTitle className="text-lg bg-gradient-to-r from-pink-700 to-purple-700 bg-clip-text text-transparent font-bold">
+            Season Statistics
+          </CardTitle>
+          <Badge variant="outline" className="text-xs border-pink-200 text-pink-700 bg-pink-50">
             {stats.length} Teams
           </Badge>
         </div>
@@ -164,9 +167,14 @@ export function StatsTable() {
             </TableHeader>
             <TableBody>
               {sortedStats.map((stat, index) => (
-                <TableRow key={stat.teamId} className="hover:bg-muted/50">
+                <TableRow key={stat.teamId} className="hover:bg-pink-50/50 transition-colors duration-200 border-b border-pink-100/30">
                   <TableCell className="font-mono text-sm">
-                    {index + 1}
+                    <div className={cn(
+                      "flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold",
+                      index === 0 ? "bg-gradient-to-r from-yellow-400 to-amber-500 text-yellow-900" : "bg-gradient-to-r from-pink-400 to-purple-500 text-white"
+                    )}>
+                      {index + 1}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div>
@@ -224,7 +232,7 @@ export function StatsTable() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border-t bg-muted/30">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border-t border-pink-100/50 bg-gradient-to-r from-pink-50/30 to-purple-50/30">
           <div className="text-center">
             <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground mb-1">
               <Users className="h-4 w-4" />

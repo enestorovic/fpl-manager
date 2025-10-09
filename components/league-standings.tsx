@@ -39,15 +39,22 @@ export function LeagueStandings({ teams, onTeamSelect, onSortChange, sortBy, ava
   }
 
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg">La Jungla LV - Premier Legue</CardTitle>
+    <Card className="h-full bg-gradient-to-br from-white via-pink-50/20 to-purple-50/20 border-pink-200/30 shadow-lg">
+      <CardHeader className="pb-3 bg-gradient-to-r from-pink-500/5 to-purple-500/5 border-b border-pink-100/30">
+        <CardTitle className="text-lg bg-gradient-to-r from-pink-700 to-purple-700 bg-clip-text text-transparent font-bold">
+          La Jungla LV - Premier League
+        </CardTitle>
         <div className="flex flex-wrap gap-2">
           <Button
             variant={sortBy === "event_total" ? "default" : "outline"}
             size="sm"
             onClick={() => onSortChange("event_total")}
-            className="text-xs"
+            className={cn(
+              "text-xs transition-all duration-200",
+              sortBy === "event_total"
+                ? "bg-pink-100 text-pink-800 border-pink-300 shadow-sm"
+                : "border-pink-200 text-pink-700 hover:bg-pink-50"
+            )}
           >
             <ArrowUpDown className="h-3 w-3 mr-1" />
             GW{selectedGameweek} Score
@@ -56,7 +63,12 @@ export function LeagueStandings({ teams, onTeamSelect, onSortChange, sortBy, ava
             variant={sortBy === "total" ? "default" : "outline"}
             size="sm"
             onClick={() => onSortChange("total")}
-            className="text-xs"
+            className={cn(
+              "text-xs transition-all duration-200",
+              sortBy === "total"
+                ? "bg-pink-100 text-pink-800 border-pink-300 shadow-sm"
+                : "border-pink-200 text-pink-700 hover:bg-pink-50"
+            )}
           >
             <ArrowUpDown className="h-3 w-3 mr-1" />
             Total Score
@@ -82,14 +94,22 @@ export function LeagueStandings({ teams, onTeamSelect, onSortChange, sortBy, ava
             const rankMovement = getRankMovement(team.rank, team.last_rank)
             const MovementIcon = rankMovement.icon
 
+            const getRankBadgeColor = (rank: number) => {
+              if (rank === 1) return "bg-gradient-to-r from-yellow-400 to-amber-500 text-yellow-900 shadow-lg"
+              return "bg-gradient-to-r from-pink-400 to-purple-500 text-white shadow-md"
+            }
+
             return (
               <div
                 key={team.id}
                 onClick={() => onTeamSelect(team)}
-                className="flex items-center gap-3 p-3 cursor-pointer transition-colors hover:bg-muted/50 active:bg-muted/70"
+                className="flex items-center gap-3 p-3 cursor-pointer transition-all duration-200 rounded-lg mx-2 mb-1 bg-white/70 hover:bg-pink-50/70 border border-pink-100/50 hover:border-pink-200/70 shadow-sm hover:shadow-md"
               >
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-sm font-medium">
+                  <div className={cn(
+                    "flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold",
+                    getRankBadgeColor(team.rank)
+                  )}>
                     {team.rank}
                   </div>
                   {rankMovement.movement !== 0 && (
@@ -107,7 +127,7 @@ export function LeagueStandings({ teams, onTeamSelect, onSortChange, sortBy, ava
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{team.event_total}</span>
                     {chip && (
-                      <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
+                      <Badge className="text-xs px-1.5 py-0.5 bg-gradient-to-r from-orange-400 to-red-500 text-white border-0 shadow-sm">
                         {chip}
                       </Badge>
                     )}
