@@ -27,10 +27,10 @@ export function Logo({ className, size = "md", showText = true }: LogoProps) {
       </div>
       {showText && (
         <div className="flex flex-col">
-          <span className="font-black text-xl leading-tight bg-gradient-to-r from-pink-600 via-purple-600 to-pink-700 bg-clip-text text-transparent">
+          <span className="font-bold text-xl leading-tight text-pink-700">
             LA JUNGLA LV
           </span>
-          <span className="text-sm font-medium text-pink-700/80 leading-tight tracking-wide">
+          <span className="text-sm font-medium text-pink-600/70 leading-tight tracking-wide">
             Premier League
           </span>
         </div>

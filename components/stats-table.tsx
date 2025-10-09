@@ -124,7 +124,7 @@ export function StatsTable() {
     <Card className="h-full bg-gradient-to-br from-white via-pink-50/20 to-purple-50/20 border-pink-200/30 shadow-lg">
       <CardHeader className="pb-3 bg-gradient-to-r from-pink-500/5 to-purple-500/5 border-b border-pink-100/30">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg bg-gradient-to-r from-pink-700 to-purple-700 bg-clip-text text-transparent font-bold">
+          <CardTitle className="text-lg text-pink-700 font-bold">
             Season Statistics
           </CardTitle>
           <Badge variant="outline" className="text-xs border-pink-200 text-pink-700 bg-pink-50">
