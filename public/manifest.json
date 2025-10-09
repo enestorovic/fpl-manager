@@ -1,0 +1,57 @@
+{
+  "name": "La Jungla LV - Fantasy Premier League",
+  "short_name": "La Jungla LV",
+  "description": "Fantasy Premier League management app for La Jungla LV league",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ec4899",
+  "orientation": "portrait",
+  "scope": "/",
+  "lang": "es",
+  "categories": ["sports", "games"],
+  "icons": [
+    {
+      "src": "/LOGOjungla.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/LOGOjungla.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/LOGOjungla.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Liga",
+      "short_name": "Liga",
+      "description": "Ver clasificación de la liga",
+      "url": "/?tab=league",
+      "icons": [
+        {
+          "src": "/LOGOjungla.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Copas",
+      "short_name": "Copas",
+      "description": "Ver torneos y copas",
+      "url": "/?tab=cup",
+      "icons": [
+        {
+          "src": "/LOGOjungla.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ]
+}

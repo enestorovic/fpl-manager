@@ -11,6 +11,7 @@ import { PublicTournamentViewer } from "@/components/public-tournament-viewer"
 import { BasesViewer } from "@/components/bases-viewer"
 import { StatsTable } from "@/components/stats-table"
 import { Logo } from "@/components/logo"
+import { PWAInstallPrompt } from "@/components/pwa-install-prompt"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Settings } from "lucide-react"
@@ -204,6 +205,9 @@ export default function Home() {
 
       {/* Bottom Navigation */}
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+
+      {/* PWA Install Prompt */}
+      <PWAInstallPrompt />
     </div>
   )
 }

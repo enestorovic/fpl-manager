@@ -8,7 +8,24 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "LA JUNGLA LV",
   description: "La Jungla LV - Premier League Fantasy Football League",
-    generator: 'v0.dev'
+  generator: 'v0.dev',
+  manifest: '/manifest.json',
+  themeColor: '#ec4899',
+  viewport: 'width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no, viewport-fit=cover',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'La Jungla LV'
+  },
+  formatDetection: {
+    telephone: false
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'default',
+    'apple-mobile-web-app-title': 'La Jungla LV'
+  }
 }
 
 export default function RootLayout({
@@ -18,6 +35,27 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="/LOGOjungla.png" />
+        <link rel="apple-touch-icon" href="/LOGOjungla.png" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js')
+                    .then(function(registration) {
+                      console.log('SW registered: ', registration);
+                    })
+                    .catch(function(registrationError) {
+                      console.log('SW registration failed: ', registrationError);
+                    });
+                });
+              }
+            `,
+          }}
+        />
+      </head>
       <body className={inter.className}>{children}</body>
     </html>
   )
