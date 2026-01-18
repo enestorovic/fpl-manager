@@ -94,6 +94,18 @@ export type SyncConfig = {
 }
 
 // Tournament/Cup types
+
+// Knockout seeding configuration for World Cup style tournaments
+// Maps bracket positions to group positions (e.g., "group_A_1" = Group A Winner)
+export type KnockoutSeedingMatch = {
+  team1: string  // e.g., "group_A_1" (Group A Winner) or "group_B_2" (Group B Runner-up)
+  team2: string  // e.g., "group_B_2"
+}
+
+export type KnockoutSeeding = {
+  [matchKey: string]: KnockoutSeedingMatch  // e.g., "R16_1", "R16_2", "QF_1", etc.
+}
+
 export type Tournament = {
   id: number
   name: string
@@ -113,6 +125,11 @@ export type Tournament = {
   // Knockout settings
   knockout_gameweeks: number[] | null
   knockout_legs: number
+
+  // World Cup specific settings
+  knockout_seeding: KnockoutSeeding | null  // Custom bracket seeding configuration
+  group_stage_gameweeks: number[] | null     // Gameweeks for each group stage matchday
+  group_stage_status: 'pending' | 'active' | 'completed'  // Group stage progress
 
   // Metadata
   created_by: string | null
@@ -156,6 +173,10 @@ export type TournamentMatch = {
   status: 'pending' | 'active' | 'completed'
   team1_from_match: number | null
   team2_from_match: number | null
+  // World Cup specific fields
+  group_id: number | null       // Reference to tournament_groups for group matches
+  match_type: 'group' | 'knockout'  // Type of match
+  matchday: number | null        // Matchday number for group stage matches
   created_at: string
   updated_at: string
 }

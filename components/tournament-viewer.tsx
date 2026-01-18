@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -13,10 +13,15 @@ import {
   ArrowLeft,
   Crown,
   Target,
-  RefreshCw
+  RefreshCw,
+  PlayCircle,
+  Globe
 } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase } from "@/lib/supabase"
-import type { Tournament, TournamentMatch, TournamentParticipant, Team } from "@/lib/supabase"
+import type { Tournament, TournamentMatch, TournamentParticipant, TournamentGroup, TournamentStanding, Team } from "@/lib/supabase"
+import { GroupStageViewer, GroupTeamStanding } from "@/components/group-stage-viewer"
+import { KnockoutMatchupBuilder } from "@/components/knockout-matchup-builder"
 
 interface TournamentViewerProps {
   tournamentId: number
@@ -24,8 +29,10 @@ interface TournamentViewerProps {
 }
 
 interface TournamentWithData extends Tournament {
-  participants: (TournamentParticipant & { team: Team })[]
+  participants: (TournamentParticipant & { teams: Team })[]
   matches: TournamentMatch[]
+  groups: TournamentGroup[]
+  standings: TournamentStanding[]
 }
 
 export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps) {
@@ -34,11 +41,80 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
   const [error, setError] = useState<string | null>(null)
   const [calculating, setCalculating] = useState(false)
   const [hardRefreshing, setHardRefreshing] = useState(false)
+  const [showMatchupBuilder, setShowMatchupBuilder] = useState(false)
   const [selectedRound, setSelectedRound] = useState<number | null>(null)
+  const [activeTab, setActiveTab] = useState<'groups' | 'knockout'>('groups')
+  const [groupStandingsData, setGroupStandingsData] = useState<Map<number, GroupTeamStanding[]>>(new Map())
+  const [groupStageComplete, setGroupStageComplete] = useState(false)
 
   useEffect(() => {
     fetchTournamentData()
   }, [tournamentId])
+
+  // Fetch group standings based on total FPL points
+  useEffect(() => {
+    if (!tournament || tournament.type !== 'mixed' || !tournament.group_stage_gameweeks?.length) {
+      return
+    }
+
+    const fetchGroupStandings = async () => {
+      const gameweeks = tournament.group_stage_gameweeks!
+      const standingsMap = new Map<number, GroupTeamStanding[]>()
+      let allDataAvailable = true
+
+      for (const group of tournament.groups) {
+        const groupParticipants = tournament.participants.filter(p => p.group_id === group.id)
+        const teamStandings: Array<{ teamId: number; totalPoints: number }> = []
+
+        for (const participant of groupParticipants) {
+          // Fetch total points for this team across group stage gameweeks
+          const { data: summaries, error } = await supabase
+            .from('team_summaries')
+            .select('points, transfers_cost')
+            .eq('team_id', participant.team_id)
+            .in('event_number', gameweeks)
+
+          if (error) {
+            console.error('Error fetching team summaries:', error)
+            allDataAvailable = false
+            continue
+          }
+
+          if (!summaries || summaries.length === 0) {
+            // No data yet for this team
+            teamStandings.push({ teamId: participant.team_id, totalPoints: 0 })
+            allDataAvailable = false
+          } else {
+            // Sum up points (minus transfer costs) across all gameweeks
+            const totalPoints = summaries.reduce((sum, s) => {
+              return sum + (s.points || 0) - (s.transfers_cost || 0)
+            }, 0)
+            teamStandings.push({ teamId: participant.team_id, totalPoints })
+
+            // Check if we have data for all gameweeks
+            if (summaries.length < gameweeks.length) {
+              allDataAvailable = false
+            }
+          }
+        }
+
+        // Sort by total points descending and assign positions
+        teamStandings.sort((a, b) => b.totalPoints - a.totalPoints)
+        const groupStandings: GroupTeamStanding[] = teamStandings.map((ts, idx) => ({
+          teamId: ts.teamId,
+          totalPoints: ts.totalPoints,
+          position: idx + 1
+        }))
+
+        standingsMap.set(group.id, groupStandings)
+      }
+
+      setGroupStandingsData(standingsMap)
+      setGroupStageComplete(allDataAvailable && standingsMap.size === tournament.groups.length)
+    }
+
+    fetchGroupStandings()
+  }, [tournament])
 
   useEffect(() => {
     // Auto-calculate scores if tournament is active and gameweeks have data
@@ -92,7 +168,7 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
         .from('tournament_participants')
         .select(`
           *,
-          team:teams(*)
+          teams(*)
         `)
         .eq('tournament_id', tournamentId)
 
@@ -108,10 +184,29 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
 
       if (matchesError) throw matchesError
 
+      // Fetch groups (for mixed tournaments)
+      const { data: groupsData, error: groupsError } = await supabase
+        .from('tournament_groups')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .order('group_order', { ascending: true })
+
+      if (groupsError) throw groupsError
+
+      // Fetch standings
+      const { data: standingsData, error: standingsError } = await supabase
+        .from('tournament_standings')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+
+      if (standingsError) throw standingsError
+
       setTournament({
         ...tournamentData,
         participants: participantsData || [],
-        matches: matchesData || []
+        matches: matchesData || [],
+        groups: groupsData || [],
+        standings: standingsData || []
       })
 
     } catch (error) {
@@ -138,7 +233,7 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
         .from('tournament_participants')
         .select(`
           *,
-          team:teams(*)
+          teams(*)
         `)
         .eq('tournament_id', tournamentId)
 
@@ -154,10 +249,29 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
 
       if (matchesError) throw matchesError
 
+      // Fetch groups
+      const { data: groupsData, error: groupsError } = await supabase
+        .from('tournament_groups')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .order('group_order', { ascending: true })
+
+      if (groupsError) throw groupsError
+
+      // Fetch standings
+      const { data: standingsData, error: standingsError } = await supabase
+        .from('tournament_standings')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+
+      if (standingsError) throw standingsError
+
       return {
         ...tournamentData,
         participants: participantsData || [],
-        matches: matchesData || []
+        matches: matchesData || [],
+        groups: groupsData || [],
+        standings: standingsData || []
       }
 
     } catch (error) {
@@ -519,8 +633,33 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
 
   const getTeamById = (teamId: number | null) => {
     if (!teamId || !tournament) return null
-    return tournament.participants.find(p => p.team_id === teamId)?.team
+    return tournament.participants.find(p => p.team_id === teamId)?.teams
   }
+
+  // Check if group stage is complete for mixed tournaments
+  const isGroupsComplete = groupStageComplete
+
+  // Get knockout matches only
+  const knockoutMatches = tournament?.matches.filter(m => m.match_type === 'knockout') || []
+
+  // Check if knockout teams have been assigned
+  const hasKnockoutTeamsAssigned = knockoutMatches.some(m => m.team1_id || m.team2_id)
+
+  // Use the fetched group standings for matchup builder
+  const groupStandingsMap = groupStandingsData
+
+  // Create team map for matchup builder
+  const teamMap = useMemo(() => {
+    if (!tournament) return new Map<number, Team>()
+
+    const map = new Map<number, Team>()
+    tournament.participants.forEach(p => {
+      if (p.teams) {
+        map.set(p.team_id, p.teams)
+      }
+    })
+    return map
+  }, [tournament])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -567,7 +706,13 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
     )
   }
 
-  const matchesByRound = tournament.matches.reduce((acc, match) => {
+  // For mixed tournaments, separate group and knockout matches
+  const isMixedTournament = tournament.type === 'mixed'
+  const groupMatches = tournament.matches.filter(m => m.match_type === 'group')
+  const knockoutMatchesOnly = tournament.matches.filter(m => m.match_type === 'knockout')
+
+  // Group knockout matches by round
+  const matchesByRound = knockoutMatchesOnly.reduce((acc, match) => {
     if (!acc[match.round_order]) acc[match.round_order] = []
     acc[match.round_order].push(match)
     return acc
@@ -583,7 +728,7 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
         </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Trophy className="h-6 w-6" />
+            {isMixedTournament ? <Globe className="h-6 w-6" /> : <Trophy className="h-6 w-6" />}
             {tournament.name}
           </h1>
           <p className="text-muted-foreground">{tournament.description}</p>
@@ -663,7 +808,77 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
       )}
 
 
-      {/* Tournament Bracket */}
+      {/* Mixed Tournament Tabs */}
+      {isMixedTournament && (
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'groups' | 'knockout')}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="groups" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Group Stage
+              {isGroupsComplete && <Badge variant="secondary" className="ml-1 text-xs">Complete</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="knockout" className="flex items-center gap-2">
+              <Trophy className="h-4 w-4" />
+              Knockout
+              {hasKnockoutTeamsAssigned && <Badge variant="secondary" className="ml-1 text-xs">Ready</Badge>}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="groups" className="mt-6">
+            {/* Matchup Builder Modal */}
+            {showMatchupBuilder && (
+              <KnockoutMatchupBuilder
+                tournamentId={tournament.id}
+                groups={tournament.groups}
+                groupStandings={groupStandingsMap}
+                teamMap={teamMap}
+                groupStageGameweeks={tournament.group_stage_gameweeks || []}
+                onComplete={() => {
+                  setShowMatchupBuilder(false)
+                  fetchTournamentData()
+                  setActiveTab('knockout')
+                }}
+                onCancel={() => setShowMatchupBuilder(false)}
+              />
+            )}
+
+            {/* Generate Knockout Button */}
+            {!showMatchupBuilder && isGroupsComplete && !hasKnockoutTeamsAssigned && (
+              <Alert className="mb-4">
+                <PlayCircle className="h-4 w-4" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span>Group stage complete! Build the knockout matchups to continue.</span>
+                  <Button
+                    onClick={() => setShowMatchupBuilder(true)}
+                    size="sm"
+                    className="ml-4"
+                  >
+                    Build Knockout Matchups
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Group Stage Viewer - hide when matchup builder is shown */}
+            {!showMatchupBuilder && (
+              <GroupStageViewer
+                groups={tournament.groups}
+                participants={tournament.participants as any}
+                groupStandings={groupStandingsMap}
+                isComplete={isGroupsComplete}
+                gameweeks={tournament.group_stage_gameweeks || []}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="knockout" className="mt-6">
+            {/* Knockout content will be rendered below */}
+          </TabsContent>
+        </Tabs>
+      )}
+
+      {/* Tournament Bracket - shown for knockout-only or inside knockout tab */}
+      {(!isMixedTournament || activeTab === 'knockout') && (
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -831,6 +1046,7 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Participants List */}
       <Card>
@@ -842,10 +1058,10 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
             {tournament.participants.map((participant) => (
               <div key={participant.id} className="flex items-center justify-between p-2 border rounded">
                 <div>
-                  <span className="font-medium">{participant.team.entry_name}</span>
-                  <p className="text-xs text-muted-foreground">{participant.team.player_name}</p>
+                  <span className="font-medium">{participant.teams?.entry_name}</span>
+                  <p className="text-xs text-muted-foreground">{participant.teams?.player_name}</p>
                 </div>
-                <Badge variant="outline">#{participant.team.rank}</Badge>
+                <Badge variant="outline">#{participant.teams?.rank}</Badge>
               </div>
             ))}
           </div>

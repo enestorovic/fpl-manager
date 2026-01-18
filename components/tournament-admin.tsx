@@ -17,11 +17,20 @@ import {
   Archive,
   Edit3,
   Trash2,
-  Eye
+  Eye,
+  Globe,
+  ChevronDown
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabase"
 import type { Tournament } from "@/lib/supabase"
 import { TournamentCreateForm } from "@/components/tournament-create-form-v2"
+import { WorldCupCreateForm } from "@/components/world-cup-create-form"
 import { TournamentViewer } from "@/components/tournament-viewer"
 
 interface TournamentAdminProps {
@@ -32,7 +41,7 @@ export function TournamentAdmin({ onBack }: TournamentAdminProps) {
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [showCreateForm, setShowCreateForm] = useState<'knockout' | 'worldcup' | null>(null)
   const [viewingTournament, setViewingTournament] = useState<number | null>(null)
 
   useEffect(() => {
@@ -125,13 +134,27 @@ export function TournamentAdmin({ onBack }: TournamentAdminProps) {
     }
   }
 
-  if (showCreateForm) {
+  if (showCreateForm === 'knockout') {
     return (
       <div className="min-h-screen p-4 bg-muted/30">
         <TournamentCreateForm
-          onCancel={() => setShowCreateForm(false)}
+          onCancel={() => setShowCreateForm(null)}
           onSuccess={() => {
-            setShowCreateForm(false)
+            setShowCreateForm(null)
+            fetchTournaments()
+          }}
+        />
+      </div>
+    )
+  }
+
+  if (showCreateForm === 'worldcup') {
+    return (
+      <div className="min-h-screen p-4 bg-muted/30">
+        <WorldCupCreateForm
+          onCancel={() => setShowCreateForm(null)}
+          onSuccess={() => {
+            setShowCreateForm(null)
             fetchTournaments()
           }}
         />
@@ -161,10 +184,25 @@ export function TournamentAdmin({ onBack }: TournamentAdminProps) {
             </Button>
             <h1 className="text-2xl font-bold">Tournament Management</h1>
           </div>
-          <Button onClick={() => setShowCreateForm(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Tournament
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Tournament
+                <ChevronDown className="h-4 w-4 ml-2" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setShowCreateForm('knockout')}>
+                <Trophy className="h-4 w-4 mr-2" />
+                Knockout Tournament
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowCreateForm('worldcup')}>
+                <Globe className="h-4 w-4 mr-2" />
+                World Cup (Groups + Knockout)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Error Alert */}
@@ -245,10 +283,16 @@ export function TournamentAdmin({ onBack }: TournamentAdminProps) {
               <div className="text-center py-12">
                 <Trophy className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <p className="text-muted-foreground mb-4">No tournaments created yet</p>
-                <Button onClick={() => setShowCreateForm(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Your First Tournament
-                </Button>
+                <div className="flex gap-2 justify-center">
+                  <Button variant="outline" onClick={() => setShowCreateForm('knockout')}>
+                    <Trophy className="h-4 w-4 mr-2" />
+                    Create Knockout
+                  </Button>
+                  <Button onClick={() => setShowCreateForm('worldcup')}>
+                    <Globe className="h-4 w-4 mr-2" />
+                    Create World Cup
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
