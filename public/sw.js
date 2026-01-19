@@ -1,47 +1,82 @@
-const CACHE_NAME = 'la-jungla-lv-v1';
-const urlsToCache = [
-  '/',
+const CACHE_NAME = 'la-jungla-lv-v2';
+const STATIC_ASSETS = [
   '/manifest.json',
   '/LOGOjungla.png',
   '/bases.png',
   '/calendario_cuotas.png',
+  '/icon-192.png',
+  '/icon-512.png',
 ];
 
-// Install event - cache resources
+// Install event - cache static assets only
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
+        console.log('Caching static assets');
+        return cache.addAll(STATIC_ASSETS);
       })
+      .then(() => self.skipWaiting())
   );
 });
 
-// Fetch event - serve from cache when offline
+// Fetch event - network first for HTML/API, cache first for static assets
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // Network first for HTML pages and API calls
+  if (event.request.mode === 'navigate' ||
+      url.pathname.startsWith('/api/') ||
+      event.request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(
+      fetch(event.request)
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Cache first for static assets
+  if (STATIC_ASSETS.some(asset => url.pathname.endsWith(asset) || url.pathname === asset)) {
+    event.respondWith(
+      caches.match(event.request)
+        .then((response) => response || fetch(event.request))
+    );
+    return;
+  }
+
+  // Network first for everything else (JS, CSS, etc.)
   event.respondWith(
-    caches.match(event.request)
+    fetch(event.request)
       .then((response) => {
-        // Return cached version or fetch from network
-        return response || fetch(event.request);
-      }
-    )
+        // Don't cache if not successful
+        if (!response || response.status !== 200) {
+          return response;
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
 
-// Activate event - clean up old caches
+// Activate event - clean up old caches and take control immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys()
+      .then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== CACHE_NAME) {
+              console.log('Deleting old cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      })
+      .then(() => self.clients.claim())
   );
 });
