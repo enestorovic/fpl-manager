@@ -7,6 +7,7 @@ import { TeamSummarySheet } from "@/components/team-summary-sheet"
 import { AdminLogin } from "@/components/admin-login"
 import { AutomatedAdminPanel } from "@/components/automated-admin-panel"
 import { PublicTournamentList } from "@/components/public-tournament-list"
+import { PublicTournamentViewer } from "@/components/public-tournament-viewer"
 import { BasesViewer } from "@/components/bases-viewer"
 import { StatsTable } from "@/components/stats-table"
 import { Logo } from "@/components/logo"
@@ -29,6 +30,9 @@ export default function Home() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [availableGameweeks, setAvailableGameweeks] = useState<number[]>([])
   const [selectedGameweek, setSelectedGameweek] = useState<number>(1)
+
+  // Tournament state
+  const [selectedTournament, setSelectedTournament] = useState<number | null>(null)
 
   useEffect(() => {
     initializeData()
@@ -85,6 +89,14 @@ export default function Home() {
 
   const handleSortChange = (newSortBy: "event_total" | "total") => {
     setSortBy(newSortBy)
+  }
+
+  const handleTournamentSelect = (tournamentId: number) => {
+    setSelectedTournament(tournamentId)
+  }
+
+  const handleBackToTournaments = () => {
+    setSelectedTournament(null)
   }
 
   if (showAdmin && !isAdmin) {
@@ -162,7 +174,15 @@ export default function Home() {
 
         {activeTab === "cup" && (
           <div className="max-w-4xl mx-auto">
-            <PublicTournamentList />
+            {selectedTournament ? (
+              <PublicTournamentViewer
+                key={selectedTournament}
+                tournamentId={selectedTournament}
+                onBack={handleBackToTournaments}
+              />
+            ) : (
+              <PublicTournamentList onTournamentSelect={handleTournamentSelect} />
+            )}
           </div>
         )}
 

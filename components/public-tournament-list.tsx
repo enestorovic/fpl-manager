@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,7 +16,11 @@ import {
 import { supabase } from "@/lib/supabase"
 import type { Tournament } from "@/lib/supabase"
 
-export function PublicTournamentList() {
+interface PublicTournamentListProps {
+  onTournamentSelect: (tournamentId: number) => void
+}
+
+export function PublicTournamentList({ onTournamentSelect }: PublicTournamentListProps) {
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -154,11 +157,12 @@ export function PublicTournamentList() {
               </div>
             )}
 
-            <Link href={`/cup/${tournament.id}`} className="block">
-              <Button className="w-full">
-                Ver Cuadro del Torneo
-              </Button>
-            </Link>
+            <Button
+              onClick={() => onTournamentSelect(tournament.id)}
+              className="w-full"
+            >
+              Ver Cuadro del Torneo
+            </Button>
           </CardContent>
         </Card>
       ))}
