@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -40,6 +40,16 @@ export function GroupStageViewer({
   isComplete,
   gameweeks
 }: GroupStageViewerProps) {
+  // Use controlled tabs with state
+  const [selectedGroup, setSelectedGroup] = useState<string | undefined>(undefined)
+
+  // Set initial group when groups load
+  useEffect(() => {
+    if (groups.length > 0 && !selectedGroup) {
+      setSelectedGroup(groups[0].id.toString())
+    }
+  }, [groups, selectedGroup])
+
   // Get team info by ID
   const teamMap = useMemo(() => {
     const map = new Map<number, Team>()
@@ -96,7 +106,8 @@ export function GroupStageViewer({
       </div>
 
       {/* Groups Display */}
-      <Tabs defaultValue={groups[0]?.id.toString()} className="w-full">
+      {selectedGroup && (
+      <Tabs value={selectedGroup} onValueChange={setSelectedGroup} className="w-full">
         <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${Math.min(groups.length, 8)}, 1fr)` }}>
           {groups.map(group => (
             <TabsTrigger key={group.id} value={group.id.toString()}>
@@ -176,6 +187,7 @@ export function GroupStageViewer({
           )
         })}
       </Tabs>
+      )}
 
       {/* All Groups Summary View */}
       {groups.length > 2 && (

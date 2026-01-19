@@ -176,6 +176,7 @@ export default function Home() {
           <div className="max-w-4xl mx-auto">
             {selectedTournament ? (
               <PublicTournamentViewer
+                key={selectedTournament}
                 tournamentId={selectedTournament}
                 onBack={handleBackToTournaments}
               />
