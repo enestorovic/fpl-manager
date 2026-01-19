@@ -354,7 +354,11 @@ export function PublicTournamentViewer({ tournamentId, onBack }: PublicTournamen
             </div>
             <div className="flex items-center gap-2">
               <Target className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">Formato {tournament.type}</span>
+              <span className="text-sm">
+                {tournament.type === 'knockout' && 'Eliminación Directa'}
+                {tournament.type === 'mixed' && `${tournament.groups.length} Grupos + Eliminación`}
+                {tournament.type === 'group' && `${tournament.groups.length} Grupos`}
+              </span>
             </div>
           </div>
         </CardContent>
@@ -388,13 +392,201 @@ export function PublicTournamentViewer({ tournamentId, onBack }: PublicTournamen
           </TabsContent>
 
           <TabsContent value="knockout" className="mt-6">
-            {/* Knockout content will be rendered below */}
+            {/* Knockout Bracket for Mixed Tournaments */}
+            {hasKnockoutTeamsAssigned ? (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Cuadro de Eliminatorias</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Progreso:</span>
+                      <div className="flex items-center gap-1">
+                        {Object.keys(matchesByRound).map((round) => {
+                          const roundNum = parseInt(round)
+                          const roundMatches = matchesByRound[roundNum]
+                          const completedMatches = roundMatches.filter(m => m.status === 'completed').length
+                          const totalMatches = roundMatches.length
+                          const isCompleted = completedMatches === totalMatches
+
+                          return (
+                            <div
+                              key={round}
+                              className={`w-3 h-3 rounded-full ${
+                                isCompleted
+                                  ? 'bg-green-500'
+                                  : completedMatches > 0
+                                    ? 'bg-yellow-500'
+                                    : 'bg-gray-300'
+                              }`}
+                              title={`${roundMatches[0]?.round_name || `Ronda ${round}`}: ${completedMatches}/${totalMatches} completados`}
+                            />
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {/* Phase Navigation */}
+                  <div className="mb-6">
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      <Button
+                        variant={selectedRound === null ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedRound(null)}
+                        className="text-xs"
+                      >
+                        Todas las Fases
+                      </Button>
+                      {Object.entries(matchesByRound).map(([round, matches]) => {
+                        const roundNum = parseInt(round)
+                        const completedMatches = matches.filter(m => m.status === 'completed').length
+                        const totalMatches = matches.length
+
+                        return (
+                          <Button
+                            key={round}
+                            variant={selectedRound === roundNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setSelectedRound(roundNum)}
+                            className="text-xs flex items-center gap-2"
+                          >
+                            {matches[0]?.round_name || `Ronda ${round}`}
+                            <Badge variant="secondary" className="text-xs px-1">
+                              {completedMatches}/{totalMatches}
+                            </Badge>
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Bracket Display */}
+                  <div className="space-y-6">
+                    {Object.entries(matchesByRound)
+                      .filter(([round]) => selectedRound === null || parseInt(round) === selectedRound)
+                      .map(([round, matches]) => (
+                      <div key={round}>
+                        <div className="flex items-center gap-3 mb-4">
+                          <h3 className="text-lg font-medium">
+                            {matches[0]?.round_name || `Ronda ${round}`}
+                          </h3>
+                          <Badge variant="outline" className="text-xs">
+                            {matches.filter(m => m.status === 'completed').length} de {matches.length} completados
+                          </Badge>
+                        </div>
+
+                        <div className={`grid gap-4 ${
+                          matches.length <= 2 ? 'grid-cols-1' :
+                          matches.length <= 4 ? 'grid-cols-1 md:grid-cols-2' :
+                          'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+                        }`}>
+                          {matches.map((match) => {
+                            const result = getMatchResult(match)
+
+                            return (
+                              <div key={match.id} className="border rounded-lg p-4 bg-gradient-to-br from-white to-pink-50/30">
+                                <div className="flex items-center justify-between mb-3">
+                                  <span className="text-sm font-medium text-pink-700">
+                                    Partido {match.match_order + 1}
+                                  </span>
+                                  <Badge variant="outline" className="text-xs border-pink-200 text-pink-700">
+                                    GW {match.gameweeks.join(', ')}
+                                  </Badge>
+                                </div>
+
+                                {result ? (
+                                  <div className="space-y-2">
+                                    {/* Team 1 */}
+                                    <div className={`flex items-center justify-between p-3 rounded-lg transition-all ${
+                                      result.team1.isWinner
+                                        ? 'bg-gradient-to-r from-green-100 to-emerald-100 border border-green-300 shadow-sm'
+                                        : 'bg-gray-50 border border-gray-200'
+                                    }`}>
+                                      <div className="flex items-center gap-2">
+                                        {result.team1.isWinner && <Crown className="h-4 w-4 text-yellow-600" />}
+                                        <div>
+                                          <span className="font-medium text-sm">{result.team1.entry_name}</span>
+                                          <div className="text-xs text-muted-foreground">#{result.team1.rank}</div>
+                                        </div>
+                                      </div>
+                                      <div className={`font-mono font-bold text-lg ${
+                                        result.team1.isWinner ? 'text-green-700' : 'text-gray-600'
+                                      }`}>
+                                        {match.status === 'completed' ? result.team1.score : '—'}
+                                      </div>
+                                    </div>
+
+                                    {/* VS */}
+                                    <div className="text-center text-xs text-pink-600 font-medium">VS</div>
+
+                                    {/* Team 2 */}
+                                    <div className={`flex items-center justify-between p-3 rounded-lg transition-all ${
+                                      result.team2.isWinner
+                                        ? 'bg-gradient-to-r from-green-100 to-emerald-100 border border-green-300 shadow-sm'
+                                        : 'bg-gray-50 border border-gray-200'
+                                    }`}>
+                                      <div className="flex items-center gap-2">
+                                        {result.team2.isWinner && <Crown className="h-4 w-4 text-yellow-600" />}
+                                        <div>
+                                          <span className="font-medium text-sm">{result.team2.entry_name}</span>
+                                          <div className="text-xs text-muted-foreground">#{result.team2.rank}</div>
+                                        </div>
+                                      </div>
+                                      <div className={`font-mono font-bold text-lg ${
+                                        result.team2.isWinner ? 'text-green-700' : 'text-gray-600'
+                                      }`}>
+                                        {match.status === 'completed' ? result.team2.score : '—'}
+                                      </div>
+                                    </div>
+
+                                    {result.isDraw && (
+                                      <div className="text-center text-sm text-orange-600 font-medium mt-2 p-2 bg-orange-50 rounded">
+                                        Empate
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="text-center text-muted-foreground py-8 bg-gray-50 rounded-lg">
+                                    <Users className="h-6 w-6 mx-auto mb-2 text-gray-400" />
+                                    <p className="text-sm">
+                                      {match.status === 'pending' ? 'Equipos por determinar' : 'Partido pendiente'}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center py-12">
+                    <Trophy className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                    <h3 className="text-lg font-medium mb-2">Eliminatorias Pendientes</h3>
+                    <p className="text-muted-foreground">
+                      La fase de eliminatorias comenzará cuando termine la fase de grupos.
+                    </p>
+                    {!isGroupsComplete && (
+                      <Badge variant="outline" className="mt-4">
+                        Fase de grupos en progreso
+                      </Badge>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       )}
 
-      {/* Tournament Bracket - shown for knockout-only or inside knockout tab */}
-      {(!isMixedTournament || activeTab === 'knockout') && (
+      {/* Tournament Bracket - shown for knockout-only tournaments */}
+      {!isMixedTournament && (
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
