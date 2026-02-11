@@ -1,25 +1,25 @@
-name: FPL Hourly Sync
+name: FPL Daily Full Sync
 
 on:
   schedule:
-    # Every hour during FPL season (adjust as needed)
-    - cron: '0 * * * *'
+    # Daily at 8 AM UTC
+    - cron: '0 8 * * *'
   workflow_dispatch: # Manual trigger
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger FPL Sync
+      - name: Trigger FPL Full Sync
         run: |
-          echo "Triggering FPL sync..."
+          echo "Triggering FPL full sync..."
           response=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "https://${{ secrets.VERCEL_URL }}/api/cron/sync")
-          
+            "https://${{ secrets.VERCEL_URL }}/api/cron/sync-full")
+
           if [ $response -eq 200 ]; then
-            echo "✅ Sync triggered successfully"
+            echo "Sync triggered successfully"
           else
-            echo "❌ Sync failed with status: $response"
+            echo "Sync failed with status: $response"
             exit 1
           fi
