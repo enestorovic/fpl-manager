@@ -1,4 +1,4 @@
-const CACHE_NAME = 'la-jungla-lv-v2';
+const CACHE_NAME = 'la-jungla-lv-v3';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/LOGOjungla.png',
@@ -35,7 +35,10 @@ self.addEventListener('fetch', (event) => {
       event.request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
       fetch(event.request)
-        .catch(() => caches.match(event.request))
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          return cached || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+        })
     );
     return;
   }
@@ -52,14 +55,10 @@ self.addEventListener('fetch', (event) => {
   // Network first for everything else (JS, CSS, etc.)
   event.respondWith(
     fetch(event.request)
-      .then((response) => {
-        // Don't cache if not successful
-        if (!response || response.status !== 200) {
-          return response;
-        }
-        return response;
+      .catch(async () => {
+        const cached = await caches.match(event.request);
+        return cached || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
       })
-      .catch(() => caches.match(event.request))
   );
 });
 

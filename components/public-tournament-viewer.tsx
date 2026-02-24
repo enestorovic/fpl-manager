@@ -252,8 +252,16 @@ export function PublicTournamentViewer({ tournamentId, onBack }: PublicTournamen
             .filter(([round]) => selectedRound === null || parseInt(round) === selectedRound)
             .map(([round, matches]) => (
             <div key={round}>
-              <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
                 <h3 className="text-lg font-medium">{matches[0]?.round_name || `Ronda ${round}`}</h3>
+                {(() => {
+                  const roundGws = [...new Set(matches.flatMap(m => m.gameweeks))].sort((a, b) => a - b)
+                  return roundGws.length > 0 ? (
+                    <Badge variant="secondary" className="text-xs">
+                      GW {roundGws.join(', ')}
+                    </Badge>
+                  ) : null
+                })()}
                 <Badge variant="outline" className="text-xs">
                   {matches.filter(m => m.status === 'completed').length} de {matches.length} completados
                 </Badge>

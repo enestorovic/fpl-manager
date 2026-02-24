@@ -95,6 +95,13 @@ export type SyncConfig = {
 
 // Tournament/Cup types
 
+// Per-round configuration for World Cup knockout stages
+export type KnockoutRoundConfig = {
+  round_name: string
+  round_order: number
+  gameweeks: number[]
+}
+
 // Knockout seeding configuration for World Cup style tournaments
 // Maps bracket positions to group positions (e.g., "group_A_1" = Group A Winner)
 export type KnockoutSeedingMatch = {
@@ -130,6 +137,7 @@ export type Tournament = {
   knockout_seeding: KnockoutSeeding | null  // Custom bracket seeding configuration
   group_stage_gameweeks: number[] | null     // Gameweeks for each group stage matchday
   group_stage_status: 'pending' | 'active' | 'completed'  // Group stage progress
+  knockout_rounds_config: KnockoutRoundConfig[] | null  // Per-round config (name + gameweeks)
 
   // Metadata
   created_by: string | null

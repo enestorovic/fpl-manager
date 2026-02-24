@@ -4,6 +4,8 @@ import { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Select,
@@ -15,14 +17,13 @@ import {
 import {
   Trophy,
   Users,
-  Plus,
   X,
   AlertCircle,
   Check,
   Shuffle
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import type { Team, TournamentGroup } from "@/lib/supabase"
+import type { Team, TournamentGroup, KnockoutRoundConfig } from "@/lib/supabase"
 import { getKnockoutRoundName, getKnockoutRoundCount } from "@/lib/tournament-utils"
 import type { GroupTeamStanding } from "@/components/group-stage-viewer"
 
@@ -47,6 +48,7 @@ interface KnockoutMatchupBuilderProps {
   groupStandings: Map<number, GroupTeamStanding[]>
   teamMap: Map<number, Team>
   groupStageGameweeks: number[]  // Used to exclude from knockout selection
+  knockoutRoundsConfig?: KnockoutRoundConfig[] | null  // Pre-configured per-round gameweeks
   onComplete: () => void
   onCancel: () => void
 }
@@ -57,12 +59,13 @@ export function KnockoutMatchupBuilder({
   groupStandings,
   teamMap,
   groupStageGameweeks,
+  knockoutRoundsConfig,
   onComplete,
   onCancel
 }: KnockoutMatchupBuilderProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedKnockoutGameweeks, setSelectedKnockoutGameweeks] = useState<number[]>([])
+
   const availableGameweeks = Array.from({ length: 38 }, (_, i) => i + 1)
     .filter(gw => !groupStageGameweeks.includes(gw))
 
@@ -102,6 +105,24 @@ export function KnockoutMatchupBuilder({
       id: `match_${i + 1}`,
       team1: null,
       team2: null
+    }))
+  })
+
+  // Per-round config: pre-populate from knockoutRoundsConfig prop, or auto-generate
+  const [localRoundConfigs, setLocalRoundConfigs] = useState<KnockoutRoundConfig[]>(() => {
+    if (knockoutRoundsConfig && knockoutRoundsConfig.length > 0) {
+      return knockoutRoundsConfig
+    }
+    // Auto-generate round names with empty gameweeks
+    const numQualifying = groups.reduce((sum, g) => {
+      const standings = groupStandings.get(g.id) || []
+      return sum + Math.min(2, standings.length)
+    }, 0)
+    const numRounds = getKnockoutRoundCount(numQualifying)
+    return Array.from({ length: numRounds }, (_, i) => ({
+      round_name: getKnockoutRoundName(numQualifying, i + 1),
+      round_order: i + 1,
+      gameweeks: []
     }))
   })
 
@@ -214,19 +235,31 @@ export function KnockoutMatchupBuilder({
     })))
   }
 
-  // Toggle knockout gameweek selection
-  const toggleKnockoutGameweek = (gw: number) => {
-    setSelectedKnockoutGameweeks(prev =>
-      prev.includes(gw)
-        ? prev.filter(g => g !== gw)
-        : [...prev, gw].sort((a, b) => a - b)
-    )
+  // Per-round config helpers
+  const updateRoundName = (roundOrder: number, name: string) => {
+    setLocalRoundConfigs(prev => prev.map(r =>
+      r.round_order === roundOrder ? { ...r, round_name: name } : r
+    ))
+  }
+
+  const toggleRoundGameweek = (roundOrder: number, gw: number) => {
+    setLocalRoundConfigs(prev => prev.map(r => {
+      if (r.round_order !== roundOrder) return r
+      return {
+        ...r,
+        gameweeks: r.gameweeks.includes(gw)
+          ? r.gameweeks.filter(g => g !== gw)
+          : [...r.gameweeks, gw].sort((a, b) => a - b)
+      }
+    }))
   }
 
   // Validate matchups
   const validateMatchups = (): string | null => {
-    if (selectedKnockoutGameweeks.length < numKnockoutRounds) {
-      return `Select at least ${numKnockoutRounds} gameweeks for knockout rounds (one per round).`
+    for (const round of localRoundConfigs) {
+      if (round.gameweeks.length === 0) {
+        return `"${round.round_name || `Round ${round.round_order}`}" needs at least 1 gameweek.`
+      }
     }
 
     for (let i = 0; i < matches.length; i++) {
@@ -255,10 +288,14 @@ export function KnockoutMatchupBuilder({
     setError(null)
 
     try {
+      const round1Config = localRoundConfigs.find(r => r.round_order === 1)
+      const round1Gameweeks = round1Config?.gameweeks ?? []
+      const round1Name = round1Config?.round_name ?? firstRoundName
+
       // Create first-round knockout matches
       const knockoutMatchesToCreate = matches.map((match, idx) => ({
         tournament_id: tournamentId,
-        round_name: firstRoundName,
+        round_name: round1Name,
         round_order: 1,
         match_order: idx + 1,
         team1_id: match.team1!.teamId,
@@ -266,7 +303,7 @@ export function KnockoutMatchupBuilder({
         winner_id: null,
         team1_score: 0,
         team2_score: 0,
-        gameweeks: selectedKnockoutGameweeks.length > 0 ? [selectedKnockoutGameweeks[0]] : [],
+        gameweeks: round1Gameweeks,
         status: 'pending',
         group_id: null,
         match_type: 'knockout',
@@ -275,10 +312,9 @@ export function KnockoutMatchupBuilder({
         team2_from_match: null
       }))
 
-      const { data: firstRoundMatches, error: firstRoundError } = await supabase
+      const { error: firstRoundError } = await supabase
         .from('tournament_matches')
         .insert(knockoutMatchesToCreate)
-        .select()
 
       if (firstRoundError) throw firstRoundError
 
@@ -288,8 +324,9 @@ export function KnockoutMatchupBuilder({
 
       while (currentRoundMatches > 1) {
         const nextRoundMatchCount = Math.ceil(currentRoundMatches / 2)
-        const roundName = getKnockoutRoundName(qualifyingTeams.length, currentRound)
-        const roundGameweek = selectedKnockoutGameweeks[currentRound - 1] || selectedKnockoutGameweeks[selectedKnockoutGameweeks.length - 1]
+        const roundConfig = localRoundConfigs.find(r => r.round_order === currentRound)
+        const roundName = roundConfig?.round_name ?? getKnockoutRoundName(qualifyingTeams.length, currentRound)
+        const roundGameweeks = roundConfig?.gameweeks ?? []
 
         const roundMatches = Array.from({ length: nextRoundMatchCount }, (_, idx) => ({
           tournament_id: tournamentId,
@@ -301,7 +338,7 @@ export function KnockoutMatchupBuilder({
           winner_id: null,
           team1_score: 0,
           team2_score: 0,
-          gameweeks: [roundGameweek],
+          gameweeks: roundGameweeks,
           status: 'pending',
           group_id: null,
           match_type: 'knockout',
@@ -320,13 +357,19 @@ export function KnockoutMatchupBuilder({
         currentRound++
       }
 
-      // Update tournament with knockout gameweeks and group stage status
+      // Collect all knockout gameweeks (distinct, sorted)
+      const allKnockoutGameweeks = [
+        ...new Set(localRoundConfigs.flatMap(r => r.gameweeks))
+      ].sort((a, b) => a - b)
+
+      // Update tournament with knockout gameweeks, config, and group stage status
       await supabase
         .from('tournaments')
         .update({
           group_stage_status: 'completed',
-          knockout_gameweeks: selectedKnockoutGameweeks,
-          gameweeks: [...groupStageGameweeks, ...selectedKnockoutGameweeks],
+          knockout_gameweeks: allKnockoutGameweeks,
+          knockout_rounds_config: localRoundConfigs,
+          gameweeks: [...groupStageGameweeks, ...allKnockoutGameweeks],
           updated_at: new Date().toISOString()
         })
         .eq('id', tournamentId)
@@ -355,6 +398,8 @@ export function KnockoutMatchupBuilder({
     return colors[groupName] || 'bg-gray-100 text-gray-800 border-gray-200'
   }
 
+  const round1Gameweeks = localRoundConfigs.find(r => r.round_order === 1)?.gameweeks ?? []
+
   return (
     <div className="space-y-6">
       <Card>
@@ -381,31 +426,46 @@ export function KnockoutMatchupBuilder({
             </Badge>
           </div>
 
-          {/* Knockout Gameweeks Selection */}
-          <div className="p-4 border rounded-lg bg-muted/30">
-            <h3 className="font-medium mb-2">Knockout Gameweeks *</h3>
-            <p className="text-sm text-muted-foreground mb-3">
-              Select {numKnockoutRounds} gameweeks (one per round: {numKnockoutRounds > 1 ? `${firstRoundName}, ` : ''}{numKnockoutRounds > 2 ? 'Quarter-finals, ' : ''}{numKnockoutRounds > 3 ? 'Semi-finals, ' : ''}Final)
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {availableGameweeks.map(gw => (
-                <Button
-                  key={gw}
-                  variant={selectedKnockoutGameweeks.includes(gw) ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => toggleKnockoutGameweek(gw)}
-                  type="button"
-                  className="w-10 h-10"
-                >
-                  {gw}
-                </Button>
-              ))}
-            </div>
-            {selectedKnockoutGameweeks.length > 0 && (
-              <p className="text-sm text-muted-foreground mt-2">
-                Selected: {selectedKnockoutGameweeks.join(', ')} ({selectedKnockoutGameweeks.length}/{numKnockoutRounds} needed)
+          {/* Per-round gameweek configuration */}
+          <div className="space-y-3">
+            <div>
+              <h3 className="font-medium mb-1">Knockout Round Gameweeks *</h3>
+              <p className="text-sm text-muted-foreground">
+                Assign one or more gameweeks to each round. Scores will be summed across all gameweeks in a round.
               </p>
-            )}
+            </div>
+            {localRoundConfigs.map((round) => (
+              <div key={round.round_order} className="p-4 border rounded-lg bg-muted/30 space-y-3">
+                <div className="flex items-center gap-3">
+                  <Badge variant="secondary" className="text-xs shrink-0">Round {round.round_order}</Badge>
+                  <Input
+                    value={round.round_name}
+                    onChange={(e) => updateRoundName(round.round_order, e.target.value)}
+                    placeholder="Round name (e.g. Round of 16, Final)"
+                    className="h-8 text-sm"
+                  />
+                  {round.gameweeks.length > 0 && (
+                    <Badge variant="outline" className="text-xs shrink-0">
+                      GW {round.gameweeks.join(', ')}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {availableGameweeks.map(gw => (
+                    <Button
+                      key={gw}
+                      variant={round.gameweeks.includes(gw) ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => toggleRoundGameweek(round.round_order, gw)}
+                      type="button"
+                      className="h-8 w-8 p-0 text-xs"
+                    >
+                      {gw}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Actions */}
@@ -499,7 +559,7 @@ export function KnockoutMatchupBuilder({
                     <div className="flex items-center justify-between mb-3">
                       <span className="font-medium">Match {idx + 1}</span>
                       <Badge variant="outline" className="text-xs">
-                        GW {selectedKnockoutGameweeks[0] || '?'}
+                        {round1Gameweeks.length > 0 ? `GW ${round1Gameweeks.join(', ')}` : 'GW ?'}
                       </Badge>
                     </div>
 

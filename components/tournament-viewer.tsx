@@ -833,6 +833,7 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
                 groupStandings={groupStandingsMap}
                 teamMap={teamMap}
                 groupStageGameweeks={tournament.group_stage_gameweeks || []}
+                knockoutRoundsConfig={tournament.knockout_rounds_config}
                 onComplete={() => {
                   setShowMatchupBuilder(false)
                   fetchTournamentData()
@@ -952,10 +953,18 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
               .filter(([round]) => selectedRound === null || parseInt(round) === selectedRound)
               .map(([round, matches]) => (
               <div key={round}>
-                <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-3 mb-4 flex-wrap">
                   <h3 className="text-lg font-medium">
                     {matches[0]?.round_name || `Round ${round}`}
                   </h3>
+                  {(() => {
+                    const roundGws = [...new Set(matches.flatMap(m => m.gameweeks))].sort((a, b) => a - b)
+                    return roundGws.length > 0 ? (
+                      <Badge variant="secondary" className="text-xs">
+                        GW {roundGws.join(', ')}
+                      </Badge>
+                    ) : null
+                  })()}
                   <Badge variant="outline" className="text-xs">
                     {matches.filter(m => m.status === 'completed').length} of {matches.length} completed
                   </Badge>

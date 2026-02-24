@@ -24,10 +24,12 @@ import {
   Users,
   Shuffle,
   X,
-  Trash2
+  Trash2,
+  Trophy,
+  Plus
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import type { Team } from "@/lib/supabase"
+import type { Team, KnockoutRoundConfig } from "@/lib/supabase"
 import { getGroupName } from "@/lib/tournament-utils"
 
 interface WorldCupCreateFormProps {
@@ -54,7 +56,8 @@ export function WorldCupCreateForm({ onCancel, onSuccess }: WorldCupCreateFormPr
     name: '',
     description: '',
     groups: [] as GroupConfig[],
-    groupStageGameweeks: [] as number[]
+    groupStageGameweeks: [] as number[],
+    knockoutRoundsConfig: [] as KnockoutRoundConfig[]
   })
 
   useEffect(() => {
@@ -182,6 +185,50 @@ export function WorldCupCreateForm({ onCancel, onSuccess }: WorldCupCreateFormPr
     }))
   }
 
+  // Knockout rounds config helpers
+  const addKnockoutRound = () => {
+    setFormData(prev => ({
+      ...prev,
+      knockoutRoundsConfig: [
+        ...prev.knockoutRoundsConfig,
+        { round_name: '', round_order: prev.knockoutRoundsConfig.length + 1, gameweeks: [] }
+      ]
+    }))
+  }
+
+  const removeKnockoutRound = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      knockoutRoundsConfig: prev.knockoutRoundsConfig
+        .filter((_, i) => i !== index)
+        .map((r, i) => ({ ...r, round_order: i + 1 }))
+    }))
+  }
+
+  const updateKnockoutRoundName = (index: number, name: string) => {
+    setFormData(prev => ({
+      ...prev,
+      knockoutRoundsConfig: prev.knockoutRoundsConfig.map((r, i) =>
+        i === index ? { ...r, round_name: name } : r
+      )
+    }))
+  }
+
+  const toggleKnockoutRoundGameweek = (index: number, gw: number) => {
+    setFormData(prev => ({
+      ...prev,
+      knockoutRoundsConfig: prev.knockoutRoundsConfig.map((r, i) => {
+        if (i !== index) return r
+        return {
+          ...r,
+          gameweeks: r.gameweeks.includes(gw)
+            ? r.gameweeks.filter(g => g !== gw)
+            : [...r.gameweeks, gw].sort((a, b) => a - b)
+        }
+      })
+    }))
+  }
+
   // Validation functions
   const validateStep1 = (): string | null => {
     if (!formData.name.trim()) return 'Tournament name is required'
@@ -206,6 +253,20 @@ export function WorldCupCreateForm({ onCancel, onSuccess }: WorldCupCreateFormPr
     return null
   }
 
+  const validateStep4 = (): string | null => {
+    if (formData.knockoutRoundsConfig.length === 0) {
+      return 'Add at least 1 knockout round'
+    }
+    const names = new Set<string>()
+    for (const round of formData.knockoutRoundsConfig) {
+      if (!round.round_name.trim()) return 'Each round must have a name'
+      if (round.gameweeks.length === 0) return `Round "${round.round_name}" needs at least 1 gameweek`
+      if (names.has(round.round_name.trim())) return `Duplicate round name: "${round.round_name}"`
+      names.add(round.round_name.trim())
+    }
+    return null
+  }
+
   // Navigation
   const handleNext = () => {
     let validationError: string | null = null
@@ -216,6 +277,9 @@ export function WorldCupCreateForm({ onCancel, onSuccess }: WorldCupCreateFormPr
         break
       case 2:
         validationError = validateStep2()
+        break
+      case 3:
+        validationError = validateStep3()
         break
     }
 
@@ -235,7 +299,7 @@ export function WorldCupCreateForm({ onCancel, onSuccess }: WorldCupCreateFormPr
 
   // Submit tournament
   const handleSubmit = async () => {
-    const validationError = validateStep3()
+    const validationError = validateStep4()
     if (validationError) {
       setError(validationError)
       return
@@ -263,6 +327,9 @@ export function WorldCupCreateForm({ onCancel, onSuccess }: WorldCupCreateFormPr
           knockout_seeding: null,
           group_stage_gameweeks: formData.groupStageGameweeks,
           group_stage_status: 'pending',
+          knockout_rounds_config: formData.knockoutRoundsConfig.length > 0
+            ? formData.knockoutRoundsConfig
+            : null,
           created_by: 'admin'
         })
         .select()
@@ -377,7 +444,7 @@ export function WorldCupCreateForm({ onCancel, onSuccess }: WorldCupCreateFormPr
             <Globe className="h-5 w-5" />
             Create World Cup Tournament
             <Badge variant="outline" className="ml-auto">
-              Step {currentStep} of 3
+              Step {currentStep} of 4
             </Badge>
           </CardTitle>
         </CardHeader>
@@ -646,9 +713,91 @@ export function WorldCupCreateForm({ onCancel, onSuccess }: WorldCupCreateFormPr
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>Knockout gameweeks:</strong> You'll select these later when building the knockout matchups after the group stage completes.
+                  Next step: configure per-round gameweeks for the knockout phase.
                 </AlertDescription>
               </Alert>
+            </div>
+          )}
+
+          {/* Step 4: Knockout Rounds Configuration */}
+          {currentStep === 4 && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium mb-1">Knockout Rounds</h3>
+                <p className="text-sm text-muted-foreground">
+                  Define each knockout round, its name, and which gameweeks it covers.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {formData.knockoutRoundsConfig.map((round, index) => (
+                  <div key={index} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">
+                        Round {index + 1}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeKnockoutRound(index)}
+                        className="text-red-500 hover:text-red-700 h-7 w-7 p-0"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div>
+                      <Label htmlFor={`round-name-${index}`}>Round Name *</Label>
+                      <Input
+                        id={`round-name-${index}`}
+                        value={round.round_name}
+                        onChange={(e) => updateKnockoutRoundName(index, e.target.value)}
+                        placeholder="e.g. Round of 16, Quarter-Final, Final"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="mb-2 block">Gameweeks *</Label>
+                      <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                        {availableGameweeks.map(gw => (
+                          <Button
+                            key={gw}
+                            variant={round.gameweeks.includes(gw) ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => toggleKnockoutRoundGameweek(index, gw)}
+                            type="button"
+                            className="h-8 w-8 p-0"
+                          >
+                            {gw}
+                          </Button>
+                        ))}
+                      </div>
+                      {round.gameweeks.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          GW {round.gameweeks.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {formData.knockoutRoundsConfig.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+                    <Trophy className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>No knockout rounds added yet. Use the button below to add rounds.</p>
+                  </div>
+                )}
+
+                <Button
+                  variant="outline"
+                  onClick={addKnockoutRound}
+                  className="w-full"
+                  type="button"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Round
+                </Button>
+              </div>
             </div>
           )}
 
@@ -672,7 +821,7 @@ export function WorldCupCreateForm({ onCancel, onSuccess }: WorldCupCreateFormPr
               Cancel
             </Button>
             <div className="flex-1" />
-            {currentStep < 3 ? (
+            {currentStep < 4 ? (
               <Button onClick={handleNext} disabled={loading}>
                 Next
                 <ArrowRight className="h-4 w-4 ml-2" />
