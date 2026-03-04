@@ -299,7 +299,7 @@ export function PublicTournamentViewer({ tournamentId, onBack }: PublicTournamen
                               </div>
                             </div>
                             <div className={`font-mono font-bold text-lg ${result.team1.isWinner ? 'text-green-700' : 'text-gray-600'}`}>
-                              {match.status === 'completed' ? result.team1.score : '—'}
+                              {match.status !== 'pending' ? result.team1.score : '—'}
                             </div>
                           </div>
 
@@ -318,7 +318,7 @@ export function PublicTournamentViewer({ tournamentId, onBack }: PublicTournamen
                               </div>
                             </div>
                             <div className={`font-mono font-bold text-lg ${result.team2.isWinner ? 'text-green-700' : 'text-gray-600'}`}>
-                              {match.status === 'completed' ? result.team2.score : '—'}
+                              {match.status !== 'pending' ? result.team2.score : '—'}
                             </div>
                           </div>
 

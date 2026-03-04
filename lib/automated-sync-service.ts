@@ -208,6 +208,9 @@ export class AutomatedSyncService {
         chipsUpdated = result.chipsUpdated
       }
 
+      // 5. Recalculate tournament match scores from the freshly-synced team_summaries
+      await this.syncTournamentScores()
+
       await this.logSyncComplete(syncId, 'completed', {
         teamsUpdated,
         summariesUpdated,
@@ -310,6 +313,9 @@ export class AutomatedSyncService {
       const teamsData = mapLeagueStandingsToTeams(standingsData)
       const validTeams = teamsData.filter(validateTeamData)
       const teamsUpdated = await this.upsertTeams(validTeams)
+
+      // Also refresh tournament match scores
+      await this.syncTournamentScores()
 
       await this.logSyncComplete(syncId, 'completed', {
         teamsUpdated,
@@ -671,6 +677,97 @@ export class AutomatedSyncService {
     return {
       summariesUpdated: totalSummariesUpdated,
       chipsUpdated: totalChipsUpdated
+    }
+  }
+
+  // Helper: Recalculate tournament match scores from team_summaries
+  // Called after any sync that updates team_summaries so the bracket stays in sync automatically
+  async syncTournamentScores(): Promise<number> {
+    try {
+      console.log('[AutoSync] Syncing tournament scores...')
+
+      // Only process active tournaments
+      const { data: tournaments, error: tournamentsError } = await supabase
+        .from('tournaments')
+        .select('id')
+        .eq('status', 'active')
+
+      if (tournamentsError || !tournaments || tournaments.length === 0) {
+        return 0
+      }
+
+      // Fetch finished status for all gameweeks (single query)
+      const { data: finishedEvents } = await supabase
+        .from('fpl_events')
+        .select('id, finished')
+      const finishedGWSet = new Set(finishedEvents?.filter(e => e.finished).map(e => e.id) || [])
+
+      let matchesUpdated = 0
+
+      for (const tournament of tournaments) {
+        const { data: matches, error: matchesError } = await supabase
+          .from('tournament_matches')
+          .select('id, team1_id, team2_id, gameweeks, status')
+          .eq('tournament_id', tournament.id)
+          .not('team1_id', 'is', null)
+          .not('team2_id', 'is', null)
+
+        if (matchesError || !matches) continue
+
+        for (const match of matches) {
+          if (!match.team1_id || !match.team2_id) continue
+          const gws: number[] = match.gameweeks || []
+          if (gws.length === 0) continue
+
+          const allGWsFinished = gws.every(gw => finishedGWSet.has(gw))
+
+          // Skip matches that are truly final (all GWs done, already marked completed)
+          if (match.status === 'completed' && allGWsFinished) continue
+
+          const [{ data: t1Data }, { data: t2Data }] = await Promise.all([
+            supabase
+              .from('team_summaries')
+              .select('points, transfers_cost')
+              .eq('team_id', match.team1_id)
+              .in('event_number', gws),
+            supabase
+              .from('team_summaries')
+              .select('points, transfers_cost')
+              .eq('team_id', match.team2_id)
+              .in('event_number', gws)
+          ])
+
+          if (!t1Data?.length || !t2Data?.length) continue
+
+          const team1Score = t1Data.reduce((sum, s) => sum + (s.points || 0) - (s.transfers_cost || 0), 0)
+          const team2Score = t2Data.reduce((sum, s) => sum + (s.points || 0) - (s.transfers_cost || 0), 0)
+
+          const winnerId = allGWsFinished
+            ? (team1Score > team2Score ? match.team1_id : team2Score > team1Score ? match.team2_id : null)
+            : null
+          const matchStatus = allGWsFinished ? 'completed' : 'active'
+
+          const { error: updateError } = await supabase
+            .from('tournament_matches')
+            .update({
+              team1_score: team1Score,
+              team2_score: team2Score,
+              winner_id: winnerId,
+              status: matchStatus,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', match.id)
+
+          if (!updateError) matchesUpdated++
+        }
+      }
+
+      console.log(`[AutoSync] Tournament scores updated: ${matchesUpdated} matches`)
+      return matchesUpdated
+
+    } catch (error) {
+      console.error('[AutoSync] Failed to sync tournament scores:', error)
+      return 0
     }
   }
 }

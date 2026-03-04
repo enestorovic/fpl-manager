@@ -326,20 +326,36 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
     try {
       let matchesUpdated = 0
 
+      // Pre-fetch finished status for all gameweeks referenced by any match (single DB call)
+      const allMatchGWs = [...new Set(tournament.matches.flatMap(m => m.gameweeks))]
+      const { data: gwEvents } = await supabase
+        .from('fpl_events')
+        .select('id, finished')
+        .in('id', allMatchGWs)
+      const finishedGWSet = new Set(gwEvents?.filter(e => e.finished).map(e => e.id) || [])
+      const areAllGWsFinished = (gws: number[]) => gws.every(gw => finishedGWSet.has(gw))
+
       // Sort matches by round order to process them sequentially
       const sortedMatches = [...tournament.matches].sort((a, b) => a.round_order - b.round_order)
 
       // Calculate scores for each match
       for (const match of sortedMatches) {
+        const allGWsFinished = areAllGWsFinished(match.gameweeks)
+        // Process if: not yet completed, OR completed but gameweeks aren't all finished yet (stale mid-match score)
+        const needsUpdate = match.team1_id && match.team2_id &&
+          (match.status !== 'completed' || !allGWsFinished)
+
         console.log(`Processing match ${match.id}:`, {
           team1: match.team1_id,
           team2: match.team2_id,
           status: match.status,
           gameweeks: match.gameweeks,
-          roundName: match.round_name
+          roundName: match.round_name,
+          allGWsFinished,
+          needsUpdate
         })
 
-        if (match.team1_id && match.team2_id && match.status !== 'completed') {
+        if (needsUpdate) {
           // Get team summaries for the match gameweeks
           const gameweeks = match.gameweeks
 
@@ -404,11 +420,24 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
 
           // Only update match if we have valid data for the gameweeks
           if (hasValidData) {
-            // Determine winner
-            const winnerId = team1Score > team2Score ? match.team1_id :
-                            team2Score > team1Score ? match.team2_id : null
+            // Only declare a winner once all gameweeks are finished — prevents locking in stale mid-GW results
+            const winnerId = allGWsFinished
+              ? (team1Score > team2Score ? match.team1_id : team2Score > team1Score ? match.team2_id : null)
+              : null
+            // 'active' = scores live but GWs still in progress; 'completed' = all GWs done and final.
+            // The UI shows scores for both; isDraw and advanceWinners only fire on 'completed'.
+            const matchStatus = allGWsFinished ? 'completed' : 'active'
 
-            console.log(`Updating match ${match.id} with winner ${winnerId} (valid data available)`)
+            // Skip DB write + re-fetch if nothing actually changed — prevents infinite render loop
+            const scoresUnchanged = team1Score === match.team1_score && team2Score === match.team2_score
+            const statusUnchanged = matchStatus === match.status
+            const winnerUnchanged = winnerId === match.winner_id
+            if (scoresUnchanged && statusUnchanged && winnerUnchanged) {
+              console.log(`Match ${match.id} unchanged, skipping update`)
+              continue
+            }
+
+            console.log(`Updating match ${match.id}: status=${matchStatus}, winner=${winnerId}`)
 
             // Update match with scores
             const { error: updateError } = await supabase
@@ -417,7 +446,7 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
                 team1_score: team1Score,
                 team2_score: team2Score,
                 winner_id: winnerId,
-                status: 'completed',
+                status: matchStatus,
                 updated_at: new Date().toISOString()
               })
               .eq('id', match.id)
@@ -437,15 +466,20 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
         }
       }
 
-      // After updating matches, advance winners to next rounds
+      // After updating matches, fix up the bracket
       if (matchesUpdated > 0) {
-        console.log(`Updated ${matchesUpdated} matches, now advancing winners...`)
+        console.log(`Updated ${matchesUpdated} matches, fixing bracket...`)
 
-        // Fetch fresh tournament data for winner advancement
+        // Step 1: clear any next-round slots that were filled prematurely (feeder match GWs not done)
+        const freshData1 = await fetchFreshTournamentData()
+        if (freshData1) {
+          await unadvanceStaleTeams(freshData1)
+        }
+
+        // Step 2: re-fetch and advance proper winners (only for fully-completed matches)
         const freshTournamentData = await fetchFreshTournamentData()
 
         if (freshTournamentData) {
-          // Then advance winners using fresh data
           await advanceWinnersToNextRounds(freshTournamentData)
         }
 
@@ -465,6 +499,43 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
     } finally {
       if (!silent) {
         setCalculating(false)
+      }
+    }
+  }
+
+  // Clear next-round team slots where one or both feeder matches have no winner yet (GWs still in progress)
+  const unadvanceStaleTeams = async (tournamentData: TournamentWithData) => {
+    const matchesByRound: Record<number, TournamentMatch[]> = {}
+    // Only knockout matches participate in bracket advancement
+    for (const m of tournamentData.matches.filter(m => m.match_type === 'knockout')) {
+      if (!matchesByRound[m.round_order]) matchesByRound[m.round_order] = []
+      matchesByRound[m.round_order].push(m)
+    }
+
+    for (const roundStr of Object.keys(matchesByRound)) {
+      const round = parseInt(roundStr)
+      const nextRoundMatches = matchesByRound[round + 1]
+      if (!nextRoundMatches) continue
+
+      const currentMatches = matchesByRound[round].sort((a, b) => a.match_order - b.match_order)
+      const sortedNext = nextRoundMatches.sort((a, b) => a.match_order - b.match_order)
+
+      for (let i = 0; i < currentMatches.length; i += 2) {
+        const match1 = currentMatches[i]
+        const match2 = currentMatches[i + 1]
+        const nextMatch = sortedNext[Math.floor(i / 2)]
+
+        if (!nextMatch) continue
+
+        // If either feeder match has no decided winner, the next slot must be cleared
+        const bothWinnersDecided = match1?.winner_id && match2?.winner_id
+        if (!bothWinnersDecided && (nextMatch.team1_id || nextMatch.team2_id)) {
+          console.log(`Clearing stale next-round slot for match ${nextMatch.id} (feeders not yet decided)`)
+          await supabase
+            .from('tournament_matches')
+            .update({ team1_id: null, team2_id: null, updated_at: new Date().toISOString() })
+            .eq('id', nextMatch.id)
+        }
       }
     }
   }
@@ -1007,7 +1078,7 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
                               <div className={`font-mono font-bold text-lg ${
                                 result.team1.isWinner ? 'text-green-700' : 'text-gray-600'
                               }`}>
-                                {match.status === 'completed' ? result.team1.score : '—'}
+                                {match.status !== 'pending' ? result.team1.score : '—'}
                               </div>
                             </div>
 
@@ -1030,7 +1101,7 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
                               <div className={`font-mono font-bold text-lg ${
                                 result.team2.isWinner ? 'text-green-700' : 'text-gray-600'
                               }`}>
-                                {match.status === 'completed' ? result.team2.score : '—'}
+                                {match.status !== 'pending' ? result.team2.score : '—'}
                               </div>
                             </div>
 
