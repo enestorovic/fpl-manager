@@ -466,29 +466,25 @@ export function TournamentViewer({ tournamentId, onBack }: TournamentViewerProps
         }
       }
 
-      // After updating matches, fix up the bracket
-      if (matchesUpdated > 0) {
-        console.log(`Updated ${matchesUpdated} matches, fixing bracket...`)
+      // Always fix up the bracket — advancement must run even when scores didn't change
+      // (e.g. GWs just finished, winners already set by sync but next-round slots still empty)
+      const hasCompletedWithWinner = sortedMatches.some(m => m.status === 'completed' && m.winner_id)
+      if (matchesUpdated > 0 || hasCompletedWithWinner) {
+        console.log(`Fixing bracket (matchesUpdated=${matchesUpdated}, hasCompletedWithWinner=${hasCompletedWithWinner})...`)
 
-        // Step 1: clear any next-round slots that were filled prematurely (feeder match GWs not done)
+        // Step 1: clear any next-round slots filled prematurely (feeder GWs not yet done)
         const freshData1 = await fetchFreshTournamentData()
         if (freshData1) {
           await unadvanceStaleTeams(freshData1)
         }
 
-        // Step 2: re-fetch and advance proper winners (only for fully-completed matches)
+        // Step 2: re-fetch and advance proper winners (only fully-completed matches)
         const freshTournamentData = await fetchFreshTournamentData()
-
         if (freshTournamentData) {
           await advanceWinnersToNextRounds(freshTournamentData)
         }
 
-        // Refresh component state to show the advancement results
         await fetchTournamentData()
-
-        if (!silent) {
-          console.log(`Updated ${matchesUpdated} matches with scores`)
-        }
       }
 
     } catch (error) {

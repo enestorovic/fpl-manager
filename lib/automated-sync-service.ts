@@ -763,6 +763,57 @@ export class AutomatedSyncService {
       }
 
       console.log(`[AutoSync] Tournament scores updated: ${matchesUpdated} matches`)
+
+      // Advance winners to next-round slots for all active tournaments
+      let slotsAdvanced = 0
+      for (const tournament of tournaments) {
+        const { data: freshMatches } = await supabase
+          .from('tournament_matches')
+          .select('id, round_order, match_order, team1_id, team2_id, winner_id, status, match_type')
+          .eq('tournament_id', tournament.id)
+          .order('round_order', { ascending: true })
+          .order('match_order', { ascending: true })
+
+        if (!freshMatches) continue
+
+        const knockoutMatches = freshMatches.filter((m: any) => m.match_type === 'knockout')
+        const matchesByRound: Record<number, typeof knockoutMatches> = {}
+        for (const m of knockoutMatches) {
+          if (!matchesByRound[m.round_order]) matchesByRound[m.round_order] = []
+          matchesByRound[m.round_order].push(m)
+        }
+
+        for (const roundStr of Object.keys(matchesByRound)) {
+          const round = parseInt(roundStr)
+          const nextRoundMatches = matchesByRound[round + 1]
+          if (!nextRoundMatches) continue
+
+          const currentMatches = matchesByRound[round].sort((a: any, b: any) => a.match_order - b.match_order)
+          const sortedNext = nextRoundMatches.sort((a: any, b: any) => a.match_order - b.match_order)
+
+          for (let i = 0; i < currentMatches.length; i += 2) {
+            const match1 = currentMatches[i]
+            const match2 = currentMatches[i + 1]
+            const nextMatch = sortedNext[Math.floor(i / 2)]
+
+            if (!match1?.winner_id || !match2?.winner_id || !nextMatch) continue
+            if (nextMatch.team1_id || nextMatch.team2_id) continue // already filled
+
+            const { error: advErr } = await supabase
+              .from('tournament_matches')
+              .update({
+                team1_id: match1.winner_id,
+                team2_id: match2.winner_id,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', nextMatch.id)
+
+            if (!advErr) slotsAdvanced++
+          }
+        }
+      }
+
+      console.log(`[AutoSync] Tournament advancement: ${slotsAdvanced} next-round slots filled`)
       return matchesUpdated
 
     } catch (error) {
