@@ -1,6 +1,19 @@
 import { supabase } from "./supabase"
 import type { Team, TeamSummary, Chip, LeagueMetadata } from "./supabase"
 
+// Supabase has a server-side max-rows limit of 1000. Fetch all team_summaries
+// across multiple pages (max season: 36 teams × 38 GWs = 1368 rows).
+async function fetchAllTeamSummaries(select = '*'): Promise<any[]> {
+  const pageSize = 1000
+  const [page1, page2] = await Promise.all([
+    supabase.from('team_summaries').select(select).range(0, pageSize - 1),
+    supabase.from('team_summaries').select(select).range(pageSize, pageSize * 2 - 1),
+  ])
+  if (page1.error) throw page1.error
+  if (page2.error) throw page2.error
+  return [...(page1.data || []), ...(page2.data || [])]
+}
+
 export async function getTeams(sortBy: "event_total" | "total" = "event_total") {
   // Get teams with corrected totals and proper rankings
   const correctedTeams = await getTeamsWithCorrectTotals()
@@ -31,12 +44,7 @@ export async function getTeamsWithCorrectTotals(): Promise<Team[]> {
 
     if (teamsError) throw teamsError
 
-    // Get all team summaries
-    const { data: summaries, error: summariesError } = await supabase
-      .from('team_summaries')
-      .select('*')
-
-    if (summariesError) throw summariesError
+    const summaries = await fetchAllTeamSummaries()
 
     // Group summaries by team
     const summariesByTeam = summaries.reduce((acc, summary) => {
@@ -307,21 +315,20 @@ export async function getTeamsByGameweek(gameweek: number, sortBy: "event_total"
   return rankedTeams as (Team & { cumulative_total: number })[]
 }
 
-// Get available gameweeks (for dropdown)
+// Get available gameweeks (for dropdown) - uses fpl_events to avoid team_summaries row limit
 export async function getAvailableGameweeks(): Promise<number[]> {
   const { data, error } = await supabase
-    .from("team_summaries")
-    .select("event_number")
-    .order("event_number", { ascending: true })
+    .from("fpl_events")
+    .select("id")
+    .or("finished.eq.true,is_current.eq.true")
+    .order("id", { ascending: true })
 
   if (error) {
     console.error("Database error:", error)
     throw error
   }
 
-  // Get unique gameweeks
-  const gameweeks = [...new Set(data?.map(item => item.event_number) || [])]
-  return gameweeks.sort((a, b) => a - b)
+  return (data || []).map(item => item.id)
 }
 
 // Get current gameweek from league metadata
@@ -500,13 +507,7 @@ export async function getAllTeamsSeasonStats(): Promise<TeamSeasonStats[]> {
 
     if (teamsError) throw teamsError
 
-    // Get all team summaries
-    const { data: summaries, error: summariesError } = await supabase
-      .from('team_summaries')
-      .select('*')
-      .order('team_id, event_number')
-
-    if (summariesError) throw summariesError
+    const summaries = await fetchAllTeamSummaries()
 
     // Group summaries by team
     const summariesByTeam = summaries.reduce((acc, summary) => {
